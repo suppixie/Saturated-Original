@@ -1,0 +1,30 @@
+{
+  "name": "saturated",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@expo-google-fonts/boldonse": "^0.4.0",
+    "@expo-google-fonts/dm-sans": "^0.4.2",
+    "@react-native-async-storage/async-storage": "^3.1.1",
+    "expo": "~57.0.7",
+    "expo-blur": "^57.0.2",
+    "expo-font": "^57.0.1",
+    "expo-linear-gradient": "^57.0.1",
+    "expo-status-bar": "~57.0.1",
+    "lucide-react-native": "^1.25.0",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-svg": "^15.15.5"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "private": true
+}
