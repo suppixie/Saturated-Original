@@ -3,6 +3,7 @@
 # dependencies
 node_modules/
 .expo-export-check/
+.expo-live-preview/
 
 # Expo
 .expo/

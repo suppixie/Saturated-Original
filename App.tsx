@@ -15,12 +15,18 @@ import { StatusBar } from "expo-status-bar";
 import {
   Apple,
   ArrowLeftCircle,
+  Camera,
+  ChevronRight,
+  CirclePlus,
   Edit3,
   Filter,
   Globe,
   Heart,
+  Info,
+  LogOut,
   Mail,
   MessageCircle,
+  Scale,
   Search,
   Settings,
   Share2,
@@ -34,6 +40,7 @@ import Svg, {
   Circle,
   Defs,
   Polygon,
+  Rect,
   RadialGradient as SvgRadialGradient,
   Stop,
 } from "react-native-svg";
@@ -44,6 +51,7 @@ import {
   Image,
   ImageSourcePropType,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -71,7 +79,7 @@ const F = {
   bold: "DMSansBold",
 };
 
-const STORAGE_KEY = "saturated-state-v5";
+const STORAGE_KEY = "saturated-state-v7";
 const FIGMA_FRAME_WIDTH = 441;
 const FIGMA_FRAME_HEIGHT = 918;
 
@@ -99,6 +107,13 @@ type Review = {
   likes: number;
   comments: number;
 };
+type ReviewComment = {
+  id: string;
+  user: string;
+  avatar: ImageSourcePropType;
+  text: string;
+  date: string;
+};
 type SearchProfile = {
   id: string;
   name: string;
@@ -110,13 +125,16 @@ type Screen =
   | "splash"
   | "explore"
   | "search"
+  | "request"
   | "drinklist"
   | "drink"
   | "profile"
+  | "settings"
   | "review"
+  | "reviewDetail"
   | "feed";
 
-const drinks: Drink[] = [
+const coreDrinks: Drink[] = [
   {
     id: "aperol",
     name: "Aperol Spritz",
@@ -287,6 +305,604 @@ const drinks: Drink[] = [
   },
 ];
 
+type AdditionalDrinkSeed = Drink & {
+  totalReviews: number;
+  review: Omit<Review, "id" | "drinkId" | "avatar">;
+};
+
+const reviewAuthors: Record<string, ImageSourcePropType> = {
+  "Gabby Romero": require("./assets/people/gabby.png"),
+  "Liam Harper": require("./assets/people/liam.png"),
+  "Sarah James": require("./assets/people/sarah.png"),
+  "James Kent": require("./assets/people/james.png"),
+  "Jaques Dane": require("./assets/people/jaques.png"),
+  "Liddy Powell": require("./assets/people/liddy.png"),
+  "Mark Kelly": require("./assets/people/mark.png"),
+};
+
+const additionalDrinkSeeds: AdditionalDrinkSeed[] = [
+  // Soft drinks
+  {
+    id: "fanta-orange",
+    name: "Fanta Orange",
+    type: "Soft Drink",
+    typeColor: "#2903c0",
+    image: require("./assets/drinks/catalog/fanta-orange.png"),
+    rating: 4.1,
+    tags: ["Orange", "Fizzy", "Sweet"],
+    origin: "Italy",
+    brand: "Fanta",
+    description: "A lively orange soda with bright citrus sweetness and a playful sparkling finish.",
+    totalReviews: 73,
+    review: { user: "Sarah James", rating: 4, text: "Big orange aroma, lots of bubbles and a nostalgic candy-like finish. Best over ice when you want something unapologetically sweet.", tags: ["Orange", "Fizzy"], date: "19 Jul 2026", likes: 14, comments: 3 },
+  },
+  {
+    id: "dr-pepper",
+    name: "Dr Pepper",
+    type: "Soft Drink",
+    typeColor: "#2903c0",
+    image: require("./assets/drinks/catalog/dr-pepper.png"),
+    rating: 4.2,
+    tags: ["Cherry", "Spiced", "Sweet"],
+    origin: "United States",
+    brand: "Dr Pepper",
+    description: "A distinctive dark soda blending cherry, warm spice and caramel-like sweetness.",
+    totalReviews: 96,
+    review: { user: "James Kent", rating: 4.5, text: "Cherry is the first thing I notice, followed by vanilla and a curious peppery warmth. More complex than a standard cola.", tags: ["Cherry", "Spiced"], date: "18 Jul 2026", likes: 21, comments: 5 },
+  },
+  {
+    id: "sanpellegrino-limonata",
+    name: "S.Pellegrino Limonata",
+    type: "Soft Drink",
+    typeColor: "#2903c0",
+    image: require("./assets/drinks/catalog/sanpellegrino-limonata.png"),
+    rating: 4.4,
+    tags: ["Lemon", "Tart", "Refreshing"],
+    origin: "Italy",
+    brand: "S.Pellegrino",
+    description: "Sparkling Italian lemon drink with real citrus character and a pleasantly tart edge.",
+    totalReviews: 58,
+    review: { user: "Gabby Romero", rating: 4.5, text: "Proper lemon sharpness rather than just lemon candy. The fine bubbles and slightly bitter peel note keep it refreshing.", tags: ["Lemon", "Tart"], date: "17 Jul 2026", likes: 18, comments: 4 },
+  },
+  {
+    id: "club-mate",
+    name: "Club-Mate",
+    type: "Soft Drink",
+    typeColor: "#2903c0",
+    image: require("./assets/drinks/catalog/club-mate.png"),
+    rating: 3.9,
+    tags: ["Herbal", "Dry", "Caffeinated"],
+    origin: "Germany",
+    brand: "Club-Mate",
+    description: "A caffeinated sparkling yerba mate drink with herbal depth and restrained sweetness.",
+    totalReviews: 41,
+    review: { user: "Liam Harper", rating: 4, text: "Unusual at first: dry, grassy and gently smoky. Once it is ice cold, the herbal bitterness becomes very moreish.", tags: ["Herbal", "Dry"], date: "16 Jul 2026", likes: 9, comments: 2 },
+  },
+  {
+    id: "irn-bru",
+    name: "Irn-Bru",
+    type: "Soft Drink",
+    typeColor: "#2903c0",
+    image: require("./assets/drinks/catalog/irn-bru.png"),
+    rating: 4,
+    tags: ["Citrus", "Bubblegum", "Fizzy"],
+    origin: "Scotland",
+    brand: "A.G. Barr",
+    description: "A vivid Scottish soft drink with citrus, vanilla and bubblegum-like flavour notes.",
+    totalReviews: 82,
+    review: { user: "Mark Kelly", rating: 4, text: "Almost impossible to describe: orange citrus, cream soda and bubblegum all at once. Weird in the best possible way.", tags: ["Bubblegum", "Fizzy"], date: "15 Jul 2026", likes: 17, comments: 6 },
+  },
+
+  // Beers
+  {
+    id: "sierra-nevada-pale-ale",
+    name: "Sierra Nevada Pale Ale",
+    type: "Beer",
+    typeColor: "#84791b",
+    image: require("./assets/drinks/catalog/sierra-nevada-pale-ale.png"),
+    rating: 4.6,
+    tags: ["Piney", "Citrus", "Bitter"],
+    origin: "United States",
+    brand: "Sierra Nevada",
+    description: "A classic American pale ale with grapefruit, pine and a firm caramel malt backbone.",
+    totalReviews: 118,
+    review: { user: "Liam Harper", rating: 4.5, text: "A benchmark pale ale. Grapefruit and pine lead the way, with enough caramel malt to keep the finish balanced.", tags: ["Piney", "Bitter"], date: "14 Jul 2026", likes: 25, comments: 7 },
+  },
+  {
+    id: "peroni",
+    name: "Peroni Nastro Azzurro",
+    type: "Beer",
+    typeColor: "#84791b",
+    image: require("./assets/drinks/catalog/peroni.png"),
+    rating: 4.1,
+    tags: ["Crisp", "Light", "Dry"],
+    origin: "Italy",
+    brand: "Peroni",
+    description: "A clean Italian lager with delicate grain, light floral hops and a dry finish.",
+    totalReviews: 104,
+    review: { user: "Jaques Dane", rating: 4, text: "Very clean and light with a tidy dry finish. Nothing loud here, just a crisp lager that works brilliantly with food.", tags: ["Crisp", "Dry"], date: "13 Jul 2026", likes: 13, comments: 2 },
+  },
+  {
+    id: "punk-ipa",
+    name: "Punk IPA",
+    type: "Beer",
+    typeColor: "#84791b",
+    image: require("./assets/drinks/catalog/punk-ipa.png"),
+    rating: 4.3,
+    tags: ["Tropical", "Hoppy", "Bitter"],
+    origin: "Scotland",
+    brand: "BrewDog",
+    description: "A modern IPA packed with tropical fruit, citrus hops and a punchy bitter finish.",
+    totalReviews: 137,
+    review: { user: "Mark Kelly", rating: 4.5, text: "Loads of grapefruit and tropical fruit before the hops snap into a long bitter finish. Bold but still easy to drink.", tags: ["Tropical", "Hoppy"], date: "12 Jul 2026", likes: 22, comments: 5 },
+  },
+  {
+    id: "corona-extra",
+    name: "Corona Extra",
+    type: "Beer",
+    typeColor: "#84791b",
+    image: require("./assets/drinks/catalog/corona-extra.png"),
+    rating: 3.9,
+    tags: ["Light", "Crisp", "Citrus"],
+    origin: "Mexico",
+    brand: "Corona",
+    description: "A light-bodied Mexican lager known for its mellow grain and refreshing citrus pairing.",
+    totalReviews: 156,
+    review: { user: "Sarah James", rating: 4, text: "Soft grain, gentle bitterness and very refreshing with lime. It is simple, sunny and at its best straight from an ice bucket.", tags: ["Light", "Citrus"], date: "11 Jul 2026", likes: 19, comments: 4 },
+  },
+  {
+    id: "asahi-super-dry",
+    name: "Asahi Super Dry",
+    type: "Beer",
+    typeColor: "#84791b",
+    image: require("./assets/drinks/catalog/asahi-super-dry.png"),
+    rating: 4.4,
+    tags: ["Dry", "Crisp", "Clean"],
+    origin: "Japan",
+    brand: "Asahi",
+    description: "A sharp, highly attenuated Japanese lager with a clean palate and quick dry finish.",
+    totalReviews: 89,
+    review: { user: "James Kent", rating: 4.5, text: "Exceptionally clean with a brisk carbonation and almost no lingering sweetness. The dry finish makes the next sip inevitable.", tags: ["Dry", "Clean"], date: "10 Jul 2026", likes: 16, comments: 3 },
+  },
+
+  // Cocktails
+  {
+    id: "mojito",
+    name: "Mojito",
+    type: "Cocktail",
+    typeColor: "#aa0cac",
+    image: require("./assets/drinks/catalog/mojito.png"),
+    rating: 4.5,
+    tags: ["Minty", "Citrus", "Refreshing"],
+    origin: "Cuba",
+    brand: "Classic Cocktail",
+    description: "White rum, fresh lime, mint, sugar and soda built into a cool, aromatic highball.",
+    totalReviews: 124,
+    review: { user: "Gabby Romero", rating: 4.5, text: "Fresh mint and lime make this incredibly bright. The rum is present without overpowering the sparkling, cooling finish.", tags: ["Minty", "Refreshing"], date: "9 Jul 2026", likes: 28, comments: 8 },
+  },
+  {
+    id: "negroni",
+    name: "Negroni",
+    type: "Cocktail",
+    typeColor: "#aa0cac",
+    image: require("./assets/drinks/catalog/negroni.png"),
+    rating: 4.6,
+    tags: ["Bitter", "Orange", "Herbal"],
+    origin: "Italy",
+    brand: "Classic Cocktail",
+    description: "Equal parts gin, sweet vermouth and bitter aperitivo with a fragrant orange twist.",
+    totalReviews: 111,
+    review: { user: "Liddy Powell", rating: 5, text: "Bitter orange, dark herbs and a warm gin backbone. It starts assertive and becomes beautifully silky as the ice melts.", tags: ["Bitter", "Herbal"], date: "8 Jul 2026", likes: 33, comments: 9 },
+  },
+  {
+    id: "old-fashioned",
+    name: "Old Fashioned",
+    type: "Cocktail",
+    typeColor: "#aa0cac",
+    image: require("./assets/drinks/catalog/old-fashioned.png"),
+    rating: 4.7,
+    tags: ["Bourbon", "Orange", "Rich"],
+    origin: "United States",
+    brand: "Classic Cocktail",
+    description: "Whiskey gently sweetened and seasoned with aromatic bitters, served over a large cube.",
+    totalReviews: 132,
+    review: { user: "Mark Kelly", rating: 5, text: "Rich bourbon, orange oil and aromatic spice with exactly enough sweetness. A slow drink that rewards every minute in the glass.", tags: ["Bourbon", "Rich"], date: "7 Jul 2026", likes: 36, comments: 10 },
+  },
+  {
+    id: "paloma",
+    name: "Paloma",
+    type: "Cocktail",
+    typeColor: "#aa0cac",
+    image: require("./assets/drinks/catalog/paloma.png"),
+    rating: 4.4,
+    tags: ["Grapefruit", "Tangy", "Fizzy"],
+    origin: "Mexico",
+    brand: "Classic Cocktail",
+    description: "Tequila, grapefruit and lime topped with soda for a tart, lightly saline refresher.",
+    totalReviews: 77,
+    review: { user: "Sarah James", rating: 4.5, text: "Juicy grapefruit and lime make the tequila taste bright rather than heavy. A tiny salty note gives the finish real lift.", tags: ["Grapefruit", "Tangy"], date: "6 Jul 2026", likes: 20, comments: 4 },
+  },
+  {
+    id: "french-75",
+    name: "French 75",
+    type: "Cocktail",
+    typeColor: "#aa0cac",
+    image: require("./assets/drinks/catalog/french-75.png"),
+    rating: 4.5,
+    tags: ["Lemon", "Sparkling", "Dry"],
+    origin: "France",
+    brand: "Classic Cocktail",
+    description: "Gin, lemon and sugar lengthened with sparkling wine for an elegant, lively drink.",
+    totalReviews: 69,
+    review: { user: "Gabby Romero", rating: 4.5, text: "The lemon and gin give it structure while the sparkling wine keeps everything celebratory. Crisp, dry and dangerously easy.", tags: ["Lemon", "Sparkling"], date: "5 Jul 2026", likes: 24, comments: 6 },
+  },
+
+  // Wines
+  {
+    id: "cloudy-bay-sauvignon",
+    name: "Cloudy Bay Sauvignon Blanc",
+    type: "Wine",
+    typeColor: "#9c0000",
+    image: require("./assets/drinks/catalog/cloudy-bay-sauvignon.png"),
+    rating: 4.6,
+    tags: ["Tropical", "Crisp", "Herbal"],
+    origin: "New Zealand",
+    brand: "Cloudy Bay",
+    description: "Vibrant Marlborough Sauvignon Blanc with passionfruit, citrus and a fresh herbal edge.",
+    totalReviews: 86,
+    review: { user: "Liddy Powell", rating: 4.5, text: "Passionfruit and lime jump from the glass, followed by a fresh green-herb note. Bright acidity keeps it precise.", tags: ["Tropical", "Crisp"], date: "4 Jul 2026", likes: 19, comments: 4 },
+  },
+  {
+    id: "rioja-reserva",
+    name: "Rioja Reserva",
+    type: "Wine",
+    typeColor: "#9c0000",
+    image: require("./assets/drinks/catalog/rioja-reserva.png"),
+    rating: 4.5,
+    tags: ["Cherry", "Vanilla", "Oaky"],
+    origin: "Spain",
+    brand: "Marqués de Reserva",
+    description: "Mature Tempranillo with red cherry, vanilla, leather and polished oak spice.",
+    totalReviews: 74,
+    review: { user: "James Kent", rating: 4.5, text: "Ripe cherry meets vanilla and cedar, with soft tannins that make it feel already settled. Excellent with grilled food.", tags: ["Cherry", "Oaky"], date: "3 Jul 2026", likes: 17, comments: 3 },
+  },
+  {
+    id: "barolo",
+    name: "Barolo",
+    type: "Wine",
+    typeColor: "#9c0000",
+    image: require("./assets/drinks/catalog/barolo.png"),
+    rating: 4.8,
+    tags: ["Rose", "Tannic", "Earthy"],
+    origin: "Italy",
+    brand: "Piedmont Selection",
+    description: "Structured Nebbiolo showing rose, red fruit, earth and a long, finely tannic finish.",
+    totalReviews: 63,
+    review: { user: "Gabby Romero", rating: 5, text: "Perfumed with rose and cherry, then earthy and seriously structured on the palate. The finish seems to last for minutes.", tags: ["Rose", "Tannic"], date: "2 Jul 2026", likes: 29, comments: 7 },
+  },
+  {
+    id: "sancerre",
+    name: "Sancerre",
+    type: "Wine",
+    typeColor: "#9c0000",
+    image: require("./assets/drinks/catalog/sancerre.png"),
+    rating: 4.4,
+    tags: ["Mineral", "Citrus", "Dry"],
+    origin: "France",
+    brand: "Loire Valley Selection",
+    description: "Dry Loire Sauvignon Blanc with lemon, white flowers and a clean flinty mineral note.",
+    totalReviews: 57,
+    review: { user: "Sarah James", rating: 4.5, text: "Lemon peel, white flowers and a distinctly stony finish. Lean and refreshing, but not short on personality.", tags: ["Mineral", "Dry"], date: "1 Jul 2026", likes: 15, comments: 2 },
+  },
+  {
+    id: "mendoza-malbec",
+    name: "Mendoza Malbec",
+    type: "Wine",
+    typeColor: "#9c0000",
+    image: require("./assets/drinks/catalog/mendoza-malbec.png"),
+    rating: 4.5,
+    tags: ["Plum", "Cocoa", "Full-bodied"],
+    origin: "Argentina",
+    brand: "Andes Estate",
+    description: "Generous high-altitude Malbec with plum, blackberry, cocoa and smooth rounded tannins.",
+    totalReviews: 92,
+    review: { user: "Mark Kelly", rating: 4.5, text: "Dark plum and blackberry with a cocoa note that works beautifully beside steak. Full-bodied without feeling rough.", tags: ["Plum", "Cocoa"], date: "30 Jun 2026", likes: 23, comments: 5 },
+  },
+
+  // Coffees
+  {
+    id: "flat-white",
+    name: "Flat White",
+    type: "Coffee",
+    typeColor: "#a4600d",
+    image: require("./assets/drinks/catalog/flat-white.png"),
+    rating: 4.7,
+    tags: ["Velvety", "Strong", "Milky"],
+    origin: "Australia / New Zealand",
+    brand: "Coffeehouse Classic",
+    description: "Double espresso folded through finely textured milk for a strong, velvety cup.",
+    totalReviews: 143,
+    review: { user: "Liam Harper", rating: 5, text: "Silky microfoam with enough espresso to stay bold all the way through. Richer than a latte and beautifully balanced.", tags: ["Velvety", "Strong"], date: "29 Jun 2026", likes: 31, comments: 8 },
+  },
+  {
+    id: "cold-brew",
+    name: "Cold Brew",
+    type: "Coffee",
+    typeColor: "#a4600d",
+    image: require("./assets/drinks/catalog/cold-brew.png"),
+    rating: 4.4,
+    tags: ["Smooth", "Chocolate", "Cold"],
+    origin: "Japan",
+    brand: "Slow Steep",
+    description: "Coffee extracted slowly in cold water for a smooth body and low-acid chocolate notes.",
+    totalReviews: 121,
+    review: { user: "Sarah James", rating: 4.5, text: "Smooth and chocolatey with none of the sharpness hot coffee can have. Clean enough to drink without milk or sugar.", tags: ["Smooth", "Chocolate"], date: "28 Jun 2026", likes: 26, comments: 6 },
+  },
+  {
+    id: "cappuccino",
+    name: "Cappuccino",
+    type: "Coffee",
+    typeColor: "#a4600d",
+    image: require("./assets/drinks/catalog/cappuccino.png"),
+    rating: 4.5,
+    tags: ["Foamy", "Roasted", "Creamy"],
+    origin: "Italy",
+    brand: "Coffeehouse Classic",
+    description: "Espresso balanced with steamed milk and a generous cap of airy microfoam.",
+    totalReviews: 164,
+    review: { user: "Gabby Romero", rating: 4.5, text: "A deep roasted espresso under a cloud of fine, sweet foam. The proportions make every sip feel light and rich together.", tags: ["Foamy", "Roasted"], date: "27 Jun 2026", likes: 22, comments: 4 },
+  },
+  {
+    id: "iced-americano",
+    name: "Iced Americano",
+    type: "Coffee",
+    typeColor: "#a4600d",
+    image: require("./assets/drinks/catalog/iced-americano.png"),
+    rating: 4.2,
+    tags: ["Bold", "Clean", "Refreshing"],
+    origin: "United States",
+    brand: "Coffeehouse Classic",
+    description: "Espresso lengthened with cold water and ice for a bold but clean chilled coffee.",
+    totalReviews: 98,
+    review: { user: "James Kent", rating: 4, text: "Direct, dark and refreshing. The melting ice softens the espresso gradually without turning it milky or sweet.", tags: ["Bold", "Clean"], date: "26 Jun 2026", likes: 12, comments: 2 },
+  },
+  {
+    id: "mocha",
+    name: "Caffè Mocha",
+    type: "Coffee",
+    typeColor: "#a4600d",
+    image: require("./assets/drinks/catalog/mocha.png"),
+    rating: 4.3,
+    tags: ["Chocolate", "Creamy", "Sweet"],
+    origin: "Italy / United States",
+    brand: "Coffeehouse Classic",
+    description: "Espresso and steamed milk enriched with chocolate for a comforting dessert-like coffee.",
+    totalReviews: 116,
+    review: { user: "Liddy Powell", rating: 4.5, text: "Dark chocolate and espresso keep each other in check. Sweet and creamy, but with enough roast to feel like coffee rather than pudding.", tags: ["Chocolate", "Creamy"], date: "25 Jun 2026", likes: 20, comments: 5 },
+  },
+
+  // Teas
+  {
+    id: "earl-grey",
+    name: "Earl Grey",
+    type: "Tea",
+    typeColor: "#7cb100",
+    image: require("./assets/drinks/catalog/earl-grey.png"),
+    rating: 4.3,
+    tags: ["Bergamot", "Floral", "Citrus"],
+    origin: "United Kingdom",
+    brand: "Classic Tea",
+    description: "Black tea scented with fragrant bergamot oil for a brisk, floral citrus cup.",
+    totalReviews: 79,
+    review: { user: "Sarah James", rating: 4.5, text: "Brisk black tea with a clear bergamot perfume. Floral and citrusy without tasting like fragrance when brewed gently.", tags: ["Bergamot", "Floral"], date: "24 Jun 2026", likes: 18, comments: 3 },
+  },
+  {
+    id: "masala-chai",
+    name: "Masala Chai",
+    type: "Tea",
+    typeColor: "#7cb100",
+    image: require("./assets/drinks/catalog/masala-chai.png"),
+    rating: 4.7,
+    tags: ["Spiced", "Milky", "Warming"],
+    origin: "India",
+    brand: "House Chai",
+    description: "Black tea simmered with milk, ginger, cardamom, cinnamon and warming aromatic spices.",
+    totalReviews: 105,
+    review: { user: "Gabby Romero", rating: 5, text: "Cardamom and ginger lead, then cinnamon and sweet milk round everything out. Deeply aromatic and genuinely warming.", tags: ["Spiced", "Warming"], date: "23 Jun 2026", likes: 30, comments: 7 },
+  },
+  {
+    id: "jasmine-green-tea",
+    name: "Jasmine Green Tea",
+    type: "Tea",
+    typeColor: "#7cb100",
+    image: require("./assets/drinks/catalog/jasmine-green-tea.png"),
+    rating: 4.4,
+    tags: ["Floral", "Delicate", "Fresh"],
+    origin: "China",
+    brand: "Jasmine Garden",
+    description: "Green tea naturally scented with jasmine blossoms for a soft, clean and floral infusion.",
+    totalReviews: 67,
+    review: { user: "Liddy Powell", rating: 4.5, text: "Fresh green tea underneath a gentle jasmine aroma. Delicate, clean and never bitter when the water is not too hot.", tags: ["Floral", "Delicate"], date: "22 Jun 2026", likes: 16, comments: 2 },
+  },
+  {
+    id: "peach-iced-tea",
+    name: "Peach Iced Tea",
+    type: "Tea",
+    typeColor: "#7cb100",
+    image: require("./assets/drinks/catalog/peach-iced-tea.png"),
+    rating: 4.2,
+    tags: ["Peach", "Fruity", "Refreshing"],
+    origin: "United States",
+    brand: "Summer Brew",
+    description: "Chilled black tea with ripe peach flavour and a smooth, lightly sweet finish.",
+    totalReviews: 88,
+    review: { user: "Mark Kelly", rating: 4, text: "Ripe peach comes first, but there is enough tea tannin underneath to stop it becoming syrupy. Very good over lots of ice.", tags: ["Peach", "Refreshing"], date: "21 Jun 2026", likes: 14, comments: 3 },
+  },
+  {
+    id: "genmaicha",
+    name: "Genmaicha",
+    type: "Tea",
+    typeColor: "#7cb100",
+    image: require("./assets/drinks/catalog/genmaicha.png"),
+    rating: 4.5,
+    tags: ["Toasted", "Grassy", "Nutty"],
+    origin: "Japan",
+    brand: "Kyoto Tea House",
+    description: "Japanese green tea blended with roasted rice for a grassy, nutty and comforting cup.",
+    totalReviews: 54,
+    review: { user: "Liam Harper", rating: 4.5, text: "The roasted rice smells like warm popcorn, while the green tea stays fresh and grassy. Comforting and surprisingly savoury.", tags: ["Toasted", "Nutty"], date: "20 Jun 2026", likes: 17, comments: 4 },
+  },
+
+  // Whiskeys
+  {
+    id: "jameson",
+    name: "Jameson Irish Whiskey",
+    type: "Whiskey",
+    typeColor: "#8a4f16",
+    image: require("./assets/drinks/catalog/jameson.png"),
+    rating: 4.4,
+    tags: ["Smooth", "Vanilla", "Spiced"],
+    origin: "Ireland",
+    brand: "Jameson",
+    description: "Triple-distilled Irish whiskey with orchard fruit, vanilla and a gentle spicy finish.",
+    totalReviews: 147,
+    review: { user: "Mark Kelly", rating: 4.5, text: "Soft vanilla and apple with a gentle pepper note at the end. Approachable neat and still distinctive in a highball.", tags: ["Smooth", "Vanilla"], date: "19 Jun 2026", likes: 27, comments: 6 },
+  },
+  {
+    id: "glenfiddich-12",
+    name: "Glenfiddich 12",
+    type: "Whiskey",
+    typeColor: "#8a4f16",
+    image: require("./assets/drinks/catalog/glenfiddich-12.png"),
+    rating: 4.5,
+    tags: ["Pear", "Oaky", "Fresh"],
+    origin: "Scotland",
+    brand: "Glenfiddich",
+    description: "Speyside single malt showing fresh pear, light oak and a clean, gently malty finish.",
+    totalReviews: 101,
+    review: { user: "James Kent", rating: 4.5, text: "Fresh pear and cereal sweetness make the opening very friendly. Light oak and malt appear on the clean finish.", tags: ["Pear", "Oaky"], date: "18 Jun 2026", likes: 19, comments: 4 },
+  },
+  {
+    id: "makers-mark",
+    name: "Maker's Mark",
+    type: "Whiskey",
+    typeColor: "#8a4f16",
+    image: require("./assets/drinks/catalog/makers-mark.png"),
+    rating: 4.5,
+    tags: ["Caramel", "Vanilla", "Warming"],
+    origin: "United States",
+    brand: "Maker's Mark",
+    description: "Wheated Kentucky bourbon with caramel, vanilla, sweet oak and a rounded warming finish.",
+    totalReviews: 113,
+    review: { user: "Liam Harper", rating: 4.5, text: "Caramel and vanilla are generous, but the soft wheat character keeps the heat rounded. Excellent in an Old Fashioned.", tags: ["Caramel", "Warming"], date: "17 Jun 2026", likes: 22, comments: 5 },
+  },
+  {
+    id: "nikka-from-the-barrel",
+    name: "Nikka From the Barrel",
+    type: "Whiskey",
+    typeColor: "#8a4f16",
+    image: require("./assets/drinks/catalog/nikka-from-the-barrel.png"),
+    rating: 4.8,
+    tags: ["Rich", "Spiced", "Orange"],
+    origin: "Japan",
+    brand: "Nikka",
+    description: "A concentrated Japanese blend with orange peel, baking spice, oak and a powerful silky body.",
+    totalReviews: 76,
+    review: { user: "Liddy Powell", rating: 5, text: "Concentrated orange peel, clove and polished oak. Powerful, but a few drops of water reveal a wonderfully silky texture.", tags: ["Rich", "Spiced"], date: "16 Jun 2026", likes: 34, comments: 9 },
+  },
+  {
+    id: "redbreast-12",
+    name: "Redbreast 12",
+    type: "Whiskey",
+    typeColor: "#8a4f16",
+    image: require("./assets/drinks/catalog/redbreast-12.png"),
+    rating: 4.9,
+    tags: ["Dried Fruit", "Nutty", "Creamy"],
+    origin: "Ireland",
+    brand: "Redbreast",
+    description: "Single pot still Irish whiskey layered with dried fruit, toasted nuts and creamy spice.",
+    totalReviews: 84,
+    review: { user: "Mark Kelly", rating: 5, text: "Dried fruit, toasted nuts and creamy spice arrive in layers. Rich without heaviness and exceptionally long on the finish.", tags: ["Dried Fruit", "Creamy"], date: "15 Jun 2026", likes: 38, comments: 10 },
+  },
+
+  // Other drinks
+  {
+    id: "ginger-lemon-kombucha",
+    name: "Ginger Lemon Kombucha",
+    type: "Kombucha",
+    typeColor: "#116d65",
+    image: require("./assets/drinks/catalog/ginger-lemon-kombucha.png"),
+    rating: 4.2,
+    tags: ["Tangy", "Ginger", "Fizzy"],
+    origin: "United States",
+    brand: "Wild Culture",
+    description: "Fermented tea sharpened with fresh ginger and lemon for a tangy, naturally sparkling drink.",
+    totalReviews: 62,
+    review: { user: "Sarah James", rating: 4, text: "A lively fermented tang followed by lemon and a real ginger prickle. Dry enough to stay refreshing rather than juice-like.", tags: ["Tangy", "Ginger"], date: "14 Jun 2026", likes: 15, comments: 3 },
+  },
+  {
+    id: "mango-lassi",
+    name: "Mango Lassi",
+    type: "Yogurt Drink",
+    typeColor: "#116d65",
+    image: require("./assets/drinks/catalog/mango-lassi.png"),
+    rating: 4.6,
+    tags: ["Mango", "Creamy", "Sweet"],
+    origin: "India",
+    brand: "House Lassi",
+    description: "Ripe mango blended with yogurt and a touch of cardamom into a cool, creamy drink.",
+    totalReviews: 91,
+    review: { user: "Gabby Romero", rating: 4.5, text: "Ripe mango, tangy yogurt and just a whisper of cardamom. Thick and creamy, but still fresh enough beside spicy food.", tags: ["Mango", "Creamy"], date: "13 Jun 2026", likes: 24, comments: 6 },
+  },
+  {
+    id: "sparkling-mineral-water",
+    name: "Sparkling Mineral Water",
+    type: "Water",
+    typeColor: "#116d65",
+    image: require("./assets/drinks/catalog/sparkling-mineral-water.png"),
+    rating: 4,
+    tags: ["Mineral", "Crisp", "Fizzy"],
+    origin: "Italy",
+    brand: "Alpine Spring",
+    description: "Naturally mineral-rich water with fine persistent bubbles and a clean, dry finish.",
+    totalReviews: 45,
+    review: { user: "James Kent", rating: 4, text: "Fine bubbles, a subtle mineral bite and absolutely no sweetness. A simple drink, but especially good with a big meal.", tags: ["Mineral", "Crisp"], date: "12 Jun 2026", likes: 10, comments: 2 },
+  },
+  {
+    id: "horchata",
+    name: "Horchata",
+    type: "Rice Drink",
+    typeColor: "#116d65",
+    image: require("./assets/drinks/catalog/horchata.png"),
+    rating: 4.4,
+    tags: ["Cinnamon", "Creamy", "Sweet"],
+    origin: "Mexico",
+    brand: "Casa Fresca",
+    description: "A chilled rice drink infused with cinnamon and vanilla for a softly creamy refreshment.",
+    totalReviews: 59,
+    review: { user: "Liddy Powell", rating: 4.5, text: "Soft rice creaminess with cinnamon and vanilla. Sweet, cooling and surprisingly light when it is served very cold.", tags: ["Cinnamon", "Creamy"], date: "11 Jun 2026", likes: 18, comments: 4 },
+  },
+  {
+    id: "ginger-beer",
+    name: "Craft Ginger Beer",
+    type: "Ginger Beer",
+    typeColor: "#116d65",
+    image: require("./assets/drinks/catalog/ginger-beer.png"),
+    rating: 4.3,
+    tags: ["Ginger", "Spicy", "Fizzy"],
+    origin: "United Kingdom",
+    brand: "Fever Orchard",
+    description: "A non-alcoholic brewed ginger drink with citrus lift and a lingering spicy kick.",
+    totalReviews: 71,
+    review: { user: "Liam Harper", rating: 4.5, text: "Real ginger heat builds after the first sip, backed by lively bubbles and a squeeze of citrus. Excellent on its own.", tags: ["Ginger", "Spicy"], date: "10 Jun 2026", likes: 20, comments: 5 },
+  },
+];
+
+const drinks: Drink[] = [
+  ...coreDrinks,
+  ...additionalDrinkSeeds.map(({ totalReviews, review, ...drink }) => drink),
+];
+
 const exploreOrder = [
   "sprite",
   "coke",
@@ -303,12 +919,13 @@ const exploreOrder = [
   "rose",
   "cortado",
   "matcha",
+  ...additionalDrinkSeeds.map((drink) => drink.id),
 ];
 const exploreDrinks = exploreOrder
   .map((id) => drinks.find((drink) => drink.id === id))
   .filter((drink): drink is Drink => Boolean(drink));
 
-const initialReviews: Review[] = [
+const coreReviews: Review[] = [
   {
     id: "r1",
     drinkId: "aperol",
@@ -345,7 +962,276 @@ const initialReviews: Review[] = [
     likes: 3,
     comments: 1,
   },
+  {
+    id: "r4",
+    drinkId: "sprite",
+    user: "Sarah James",
+    avatar: require("./assets/people/sarah.png"),
+    rating: 4,
+    text: "Cold, bright and properly fizzy. The lemon-lime finish is simple, but it always does the job with salty food.",
+    tags: ["Refreshing", "Fizzy"],
+    date: "18 Jun 2026",
+    likes: 12,
+    comments: 3,
+  },
+  {
+    id: "r5",
+    drinkId: "coke",
+    user: "James Kent",
+    avatar: require("./assets/people/james.png"),
+    rating: 4,
+    text: "Classic caramel sweetness with a lively sparkle. Best poured over plenty of ice with a slice of lemon.",
+    tags: ["Sweet", "Fizzy"],
+    date: "17 Jun 2026",
+    likes: 9,
+    comments: 2,
+  },
+  {
+    id: "r6",
+    drinkId: "heineken",
+    user: "Jaques Dane",
+    avatar: require("./assets/people/jaques.png"),
+    rating: 4,
+    text: "Clean and crisp with a gentle herbal bitterness. A dependable lager when it is served properly cold.",
+    tags: ["Crisp", "Mild"],
+    date: "16 Jun 2026",
+    likes: 7,
+    comments: 4,
+  },
+  {
+    id: "r7",
+    drinkId: "pilsner",
+    user: "James Kent",
+    avatar: require("./assets/people/james.png"),
+    rating: 4.5,
+    text: "Floral hops, a firm bitter edge and a soft bready middle. It tastes balanced all the way through the finish.",
+    tags: ["Crisp", "Bitter"],
+    date: "15 Jun 2026",
+    likes: 18,
+    comments: 6,
+  },
+  {
+    id: "r8",
+    drinkId: "margarita",
+    user: "Gabby Romero",
+    avatar: require("./assets/people/gabby.png"),
+    rating: 4.5,
+    text: "Sharp fresh lime, a warm tequila note and just enough orange sweetness. The salt rim makes every sip pop.",
+    tags: ["Citrusy", "Tangy"],
+    date: "14 Jun 2026",
+    likes: 21,
+    comments: 5,
+  },
+  {
+    id: "r9",
+    drinkId: "hophouse",
+    user: "Liam Harper",
+    avatar: require("./assets/people/liam.png"),
+    rating: 4.5,
+    text: "Aromatic without becoming heavy. There is a pleasant hop bite, followed by a smooth and easy lager finish.",
+    tags: ["Mild", "Bitter"],
+    date: "12 Jun 2026",
+    likes: 11,
+    comments: 2,
+  },
+  {
+    id: "r10",
+    drinkId: "guinness",
+    user: "Liddy Powell",
+    avatar: require("./assets/people/liddy.png"),
+    rating: 5,
+    text: "Velvety texture, roasted malt and a dry finish. The creamy head makes it feel richer than it actually drinks.",
+    tags: ["Creamy", "Roasted"],
+    date: "10 Jun 2026",
+    likes: 24,
+    comments: 8,
+  },
+  {
+    id: "r11",
+    drinkId: "petrus",
+    user: "Gabby Romero",
+    avatar: require("./assets/people/gabby.png"),
+    rating: 5,
+    text: "Deep plum and dark cherry with a wonderfully silky texture. The finish is long, layered and quietly powerful.",
+    tags: ["Rich", "Dry"],
+    date: "8 Jun 2026",
+    likes: 31,
+    comments: 9,
+  },
+  {
+    id: "r12",
+    drinkId: "sevenup",
+    user: "Sarah James",
+    avatar: require("./assets/people/sarah.png"),
+    rating: 3.5,
+    text: "Light lemon and lime with plenty of bubbles. Sweeter than I remembered, but very refreshing straight from the fridge.",
+    tags: ["Citrus", "Fizzy"],
+    date: "7 Jun 2026",
+    likes: 6,
+    comments: 1,
+  },
+  {
+    id: "r13",
+    drinkId: "cosmo",
+    user: "Gabby Romero",
+    avatar: require("./assets/people/gabby.png"),
+    rating: 4,
+    text: "Tart cranberry and citrus up front, then a clean vodka finish. Bright, elegant and not overly sweet.",
+    tags: ["Tarty", "Fruity"],
+    date: "5 Jun 2026",
+    likes: 14,
+    comments: 4,
+  },
+  {
+    id: "r14",
+    drinkId: "espresso",
+    user: "Liddy Powell",
+    avatar: require("./assets/people/liddy.png"),
+    rating: 5,
+    text: "Bold espresso aroma with a smooth, lightly sweet finish. Strong enough to wake you up and polished enough for dessert.",
+    tags: ["Strong", "Coffee"],
+    date: "3 Jun 2026",
+    likes: 27,
+    comments: 7,
+  },
+  {
+    id: "r15",
+    drinkId: "rose",
+    user: "Sarah James",
+    avatar: require("./assets/people/sarah.png"),
+    rating: 4.5,
+    text: "Delicate strawberry and peach notes with a dry mineral finish. Light, floral and made for a sunny table.",
+    tags: ["Dry", "Floral"],
+    date: "1 Jun 2026",
+    likes: 16,
+    comments: 3,
+  },
+  {
+    id: "r16",
+    drinkId: "cortado",
+    user: "Liam Harper",
+    avatar: require("./assets/people/liam.png"),
+    rating: 4.5,
+    text: "The milk softens the espresso without hiding it. Compact, creamy and strong with a lovely roasted finish.",
+    tags: ["Creamy", "Strong"],
+    date: "30 May 2026",
+    likes: 13,
+    comments: 2,
+  },
+  {
+    id: "r17",
+    drinkId: "matcha",
+    user: "Sarah James",
+    avatar: require("./assets/people/sarah.png"),
+    rating: 4.5,
+    text: "Earthy matcha balanced by a soft white-chocolate sweetness. Creamy and comforting without losing the tea flavour.",
+    tags: ["Creamy", "Sweet"],
+    date: "28 May 2026",
+    likes: 19,
+    comments: 5,
+  },
+  {
+    id: "r18",
+    drinkId: "sprite",
+    user: "Liam Harper",
+    avatar: require("./assets/people/liam.png"),
+    rating: 3.5,
+    text: "Very clean citrus flavour and a sharp burst of carbonation. A little sweet, though still easy to drink.",
+    tags: ["Citrus", "Refreshing"],
+    date: "26 May 2026",
+    likes: 5,
+    comments: 1,
+  },
 ];
+
+const additionalReviews: Review[] = additionalDrinkSeeds.map(
+  (drink, index) => ({
+    id: `catalog-review-${index + 1}`,
+    drinkId: drink.id,
+    avatar: reviewAuthors[drink.review.user],
+    ...drink.review,
+  }),
+);
+
+const initialReviews: Review[] = [...coreReviews, ...additionalReviews];
+
+const commentVoices = [
+  {
+    user: "Sarah James",
+    avatar: require("./assets/people/sarah.png"),
+    text: "That finish is exactly what stood out to me too.",
+  },
+  {
+    user: "James Kent",
+    avatar: require("./assets/people/james.png"),
+    text: "Adding this one to my list for the weekend.",
+  },
+  {
+    user: "Liddy Powell",
+    avatar: require("./assets/people/liddy.png"),
+    text: "Great description — I had the same flavour notes.",
+  },
+  {
+    user: "Gabby Romero",
+    avatar: require("./assets/people/gabby.png"),
+    text: "It is even better properly chilled.",
+  },
+];
+
+const initialCommentThreads: Record<string, ReviewComment[]> =
+  Object.fromEntries(
+    initialReviews.map((review) => [
+      review.id,
+      Array.from({ length: review.comments }, (_, index) => {
+        const voice = commentVoices[index % commentVoices.length];
+        return {
+          id: `${review.id}-comment-${index + 1}`,
+          user: voice.user,
+          avatar: voice.avatar,
+          text: voice.text,
+          date: index === 0 ? "Today" : `${index + 1}d`,
+        };
+      }),
+    ]),
+  );
+
+function mergeSeedCommentThreads(
+  storedThreads?: Record<string, ReviewComment[]>,
+) {
+  return { ...initialCommentThreads, ...(storedThreads || {}) };
+}
+
+const reviewTotals: Record<string, number> = {
+  aperol: 56,
+  sprite: 84,
+  coke: 127,
+  heineken: 93,
+  pilsner: 68,
+  margarita: 72,
+  hophouse: 49,
+  guinness: 141,
+  petrus: 38,
+  birra: 61,
+  sevenup: 43,
+  cosmo: 76,
+  espresso: 109,
+  rose: 64,
+  cortado: 52,
+  matcha: 47,
+  ...Object.fromEntries(
+    additionalDrinkSeeds.map((drink) => [drink.id, drink.totalReviews]),
+  ),
+};
+
+function mergeSeedReviews(storedReviews?: Review[]) {
+  const stored = storedReviews || [];
+  const storedById = new Map(stored.map((review) => [review.id, review]));
+  const seedIds = new Set(initialReviews.map((review) => review.id));
+  return [
+    ...initialReviews.map((review) => storedById.get(review.id) || review),
+    ...stored.filter((review) => !seedIds.has(review.id)),
+  ];
+}
 
 const searchableProfiles: SearchProfile[] = [
   {
@@ -380,31 +1266,109 @@ const searchableProfiles: SearchProfile[] = [
 
 const glass = {
   backgroundColor: "rgba(4,178,100,.15)",
-  borderColor: "rgba(255,255,255,.7)",
-  borderWidth: 1,
+  borderColor: "rgba(255,255,255,.8)",
+  borderWidth: 0.5,
   shadowColor: "#000",
   shadowOpacity: 0.25,
-  shadowRadius: 5,
+  shadowRadius: 4,
   shadowOffset: { width: 0, height: 4 },
   elevation: 5,
 } as const;
 
-function Background({ children }: { children: React.ReactNode }) {
+function GlassLayers({
+  radius = 23,
+  intensity = 32,
+  colors = ["rgba(255,255,255,.42)", "rgba(4,178,100,.12)"],
+}: {
+  radius?: number;
+  intensity?: number;
+  colors?: readonly [string, string];
+}) {
+  return (
+    <>
+      <BlurView
+        pointerEvents="none"
+        intensity={intensity}
+        tint="light"
+        style={[s.glassBlur, { borderRadius: radius }]}
+      />
+      <LinearGradient
+        pointerEvents="none"
+        colors={colors}
+        start={{ x: 0.12, y: 0 }}
+        end={{ x: 0.88, y: 1 }}
+        style={[s.glassGradient, { borderRadius: radius }]}
+      />
+      <View
+        pointerEvents="none"
+        style={[s.glassInnerEdge, { borderRadius: radius }]}
+      />
+    </>
+  );
+}
+
+function Background({
+  children,
+  creamOpacity = 0.4,
+}: {
+  children: React.ReactNode;
+  creamOpacity?: number;
+}) {
   return (
     <SafeAreaView style={s.safe}>
-      <StatusBar style="light" />
-      <LinearGradient colors={["#fafff2", "#effff6", "#edfffb"]} style={s.bg} />
+      <StatusBar style="dark" />
+      <View style={s.bgWhite} />
+      <View
+        style={[
+          s.bgCream,
+          { backgroundColor: `rgba(255,250,228,${creamOpacity})` },
+        ]}
+      />
+      <View style={s.bgMint} />
+      <View pointerEvents="none" style={s.bgNoise} />
       <DeviceStatusBar />
       {children}
     </SafeAreaView>
   );
 }
-function DeviceStatusBar() {
+
+function DrinkCardGlow() {
+  return (
+    <Svg
+      pointerEvents="none"
+      width="100%"
+      height="100%"
+      viewBox="0 0 110 187"
+      preserveAspectRatio="none"
+      style={s.drinkGlow}
+    >
+      <Defs>
+        <SvgRadialGradient
+          id="drinkCardGlow"
+          cx="50%"
+          cy="100%"
+          rx="72%"
+          ry="55%"
+        >
+          <Stop offset="0" stopColor="#c8ff3c" stopOpacity={0.25} />
+          <Stop offset="0.35" stopColor="#64801e" stopOpacity={0.125} />
+          <Stop offset="0.7" stopColor="#000" stopOpacity={0} />
+        </SvgRadialGradient>
+      </Defs>
+      <Rect width="110" height="187" rx="16" fill="url(#drinkCardGlow)" />
+    </Svg>
+  );
+}
+function DeviceStatusBar({ light = false }: { light?: boolean }) {
   if (Platform.OS !== "web") return null;
   return (
     <View style={s.deviceStatusBar}>
-      <Text style={s.deviceStatusText}>9:41</Text>
-      <Text style={s.deviceStatusText}>▮▮▮ ◉ ▱</Text>
+      <Text style={[s.deviceStatusText, light && s.deviceStatusTextLight]}>
+        9:41
+      </Text>
+      <Text style={[s.deviceStatusText, light && s.deviceStatusTextLight]}>
+        ▮▮▮ ◉ ▱
+      </Text>
     </View>
   );
 }
@@ -531,8 +1495,19 @@ function BottomNav({
   onGo: (x: Screen) => void;
 }) {
   return (
-    <BlurView intensity={55} tint="light" style={s.nav}>
-      <View style={s.navTint} />
+    <BlurView intensity={48} tint="light" style={s.nav}>
+      <LinearGradient
+        pointerEvents="none"
+        colors={["rgba(38,81,88,.22)", "rgba(4,178,100,.22)"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={s.navTint}
+      />
+      <LinearGradient
+        pointerEvents="none"
+        colors={["rgba(255,255,255,.34)", "rgba(255,255,255,.04)"]}
+        style={s.navHighlight}
+      />
       {(["explore", "drinklist", "profile"] as Screen[]).map((x) => (
         <Pressable
           key={x}
@@ -572,7 +1547,7 @@ function Onboarding({
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={s.modalWrap}>
-        <BlurView intensity={80} tint="light" style={s.onboard}>
+        <View style={s.onboard}>
           <View style={s.handle} />
           <Text style={s.onboardTitle}>Welcome to Saturated</Text>
           <Text style={s.onboardAge}>You must be 21+ to continue</Text>
@@ -666,7 +1641,7 @@ function Onboarding({
               <Text style={s.createAccountText}>Create an account</Text>
             </Pressable>
           )}
-        </BlurView>
+        </View>
       </View>
     </Modal>
   );
@@ -678,10 +1653,11 @@ function Splash() {
       <StatusBar style="light" />
       <Image
         source={require("./assets/splash.png")}
-        style={StyleSheet.absoluteFill}
+        style={s.splashImage}
+        resizeMode="contain"
       />
       <View style={s.splashShade} />
-      <DeviceStatusBar />
+      <DeviceStatusBar light />
       <Text style={s.splashTitle}>Saturated</Text>
     </View>
   );
@@ -772,18 +1748,31 @@ function Explore({
             onLongPress={() => onToggle(item.id)}
             style={s.drinkCard}
           >
-            <Image
-              source={item.image}
-              style={s.drinkImage}
-              resizeMode="contain"
-            />
-            <View style={s.drinkLabel}>
-              <Text numberOfLines={1} style={s.drinkName}>
-                {item.name}
-              </Text>
-              <Text style={[s.tiny, { color: item.typeColor }]}>
-                {item.type}
-              </Text>
+            <View style={s.drinkCardSurface}>
+              <GlassLayers
+                radius={16}
+                intensity={15}
+                colors={["rgba(255,255,255,.5)", "rgba(255,255,255,.08)"]}
+              />
+              <DrinkCardGlow />
+              <View style={s.drinkImageFrame}>
+                <Image
+                  source={item.image}
+                  style={[
+                    s.drinkImage,
+                    item.id === "sprite" && s.spriteExploreImage,
+                  ]}
+                  resizeMode="contain"
+                />
+              </View>
+              <View style={s.drinkLabel}>
+                <Text numberOfLines={1} style={s.drinkName}>
+                  {item.name}
+                </Text>
+                <Text style={[s.tiny, { color: item.typeColor }]}>
+                  {item.type}
+                </Text>
+              </View>
             </View>
           </Pressable>
         )}
@@ -798,11 +1787,13 @@ function SearchScreen({
   onBack,
   onOpen,
   onToggle,
+  onRequest,
 }: {
   saved: string[];
   onBack: () => void;
   onOpen: (drink: Drink) => void;
   onToggle: (id: string) => void;
+  onRequest: (name: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<"beverages" | "profiles">("beverages");
@@ -894,11 +1885,16 @@ function SearchScreen({
           contentContainerStyle={s.searchResults}
           renderItem={({ item }) => (
             <Pressable onPress={() => onOpen(item)} style={s.searchResultCard}>
-              <Image
-                source={item.image}
-                style={s.searchResultImage}
-                resizeMode="contain"
-              />
+              <View style={s.searchResultImageBox}>
+                <Image
+                  source={item.image}
+                  style={[
+                    s.searchResultImage,
+                    item.id === "sprite" && s.spriteSearchImage,
+                  ]}
+                  resizeMode="contain"
+                />
+              </View>
               <View style={s.searchResultCopy}>
                 <Text style={s.searchResultName}>{item.name}</Text>
                 <Text style={[s.body, { color: item.typeColor }]}>
@@ -936,12 +1932,7 @@ function SearchScreen({
                   accessibilityRole="button"
                   accessibilityLabel={`Request ${query}`}
                   style={s.requestDrinkButton}
-                  onPress={() =>
-                    Alert.alert(
-                      "Drink requested",
-                      `Thanks — we’ll review “${query.trim()}” for Saturated.`,
-                    )
-                  }
+                  onPress={() => onRequest(query.trim())}
                 >
                   <Text style={s.primaryText}>Request drink</Text>
                 </Pressable>
@@ -987,6 +1978,84 @@ function SearchScreen({
   );
 }
 
+function RequestDrinkScreen({
+  initialName,
+  onBack,
+  onSubmit,
+}: {
+  initialName: string;
+  onBack: () => void;
+  onSubmit: (name: string) => void;
+}) {
+  const [drinkName, setDrinkName] = useState(initialName);
+  const [submitted, setSubmitted] = useState(false);
+  const validName = drinkName.trim();
+  return (
+    <Background>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <Heading back onBack={onBack}>
+          Request Drink
+        </Heading>
+        <ScrollView
+          style={s.screenScroll}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={s.requestPageContent}
+        >
+          <View style={[s.requestFormCard, glass]}>
+            <View style={s.requestIconCircle}>
+              <CirclePlus size={30} color={C.red} />
+            </View>
+            <Text style={s.requestFormTitle}>What should we add?</Text>
+            <Text style={s.requestFormCopy}>
+              Name the beverage you couldn’t find. Our team will review it for
+              the Saturated catalogue.
+            </Text>
+            <Text style={s.requestInputLabel}>Drink name</Text>
+            <TextInput
+              autoFocus
+              value={drinkName}
+              onChangeText={(value) => {
+                setDrinkName(value);
+                setSubmitted(false);
+              }}
+              placeholder="e.g. Jameson Black Barrel"
+              placeholderTextColor="rgba(32,26,27,.4)"
+              style={s.requestNameInput}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Submit drink request"
+              disabled={!validName}
+              style={[
+                s.primary,
+                s.requestSubmit,
+                !validName && s.disabledButton,
+              ]}
+              onPress={() => {
+                onSubmit(validName);
+                setSubmitted(true);
+              }}
+            >
+              <Text style={s.primaryText}>Submit request</Text>
+            </Pressable>
+            {submitted && (
+              <View style={s.requestSuccess}>
+                <Text style={s.requestSuccessTitle}>Request submitted</Text>
+                <Text style={s.requestSuccessText}>
+                  “{validName}” has been sent to the Saturated team.
+                </Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Background>
+  );
+}
+
 function Drinklist({
   items,
   onRemove,
@@ -1005,7 +2074,7 @@ function Drinklist({
     ? [...items].sort((a, b) => a.type.localeCompare(b.type))
     : items;
   return (
-    <Background>
+    <Background creamOpacity={0.5}>
       <View style={s.headerRow}>
         <Text style={s.headingText}>Drinklist</Text>
         <View style={s.iconRow}>
@@ -1032,51 +2101,64 @@ function Drinklist({
       </Text>
       <ScrollView
         style={s.screenScroll}
-        contentContainerStyle={{ paddingHorizontal: 32, paddingBottom: 130 }}
+        contentContainerStyle={{
+          paddingHorizontal: 32,
+          paddingTop: 14,
+          paddingBottom: 130,
+        }}
       >
         {visibleItems.map((d) => (
           <Pressable key={d.id} onPress={() => onOpen(d)} style={s.listCard}>
-            <View style={s.listImageBox}>
-              <Image
-                source={d.image}
-                style={s.listImage}
-                resizeMode="contain"
+            <View style={s.listCardSurface}>
+              <GlassLayers
+                radius={23}
+                intensity={40}
+                colors={["rgba(255,255,255,.28)", "rgba(4,178,100,.15)"]}
               />
-            </View>
-            <View style={{ flex: 1, padding: 10 }}>
-              <Text style={s.cardTitle}>{d.name}</Text>
-              <View style={s.inline}>
-                <Pill color={d.typeColor}>{d.type}</Pill>
-                <Text style={s.cardTitle}>{d.rating} ★</Text>
+              <View style={s.listImageBox}>
+                <Image
+                  source={d.image}
+                  style={[s.listImage, d.id === "sprite" && s.spriteListImage]}
+                  resizeMode="contain"
+                />
               </View>
-              <View style={s.inline}>
-                {d.tags.map((t) => (
-                  <Pill key={t} color="#960000">
-                    {t}
-                  </Pill>
-                ))}
+              <View style={s.listDetails}>
+                <Text numberOfLines={1} style={s.cardTitle}>
+                  {d.name}
+                </Text>
+                <View style={s.listMetaRow}>
+                  <Pill color={d.typeColor}>{d.type}</Pill>
+                  <Text style={s.cardTitle}>{d.rating} ★</Text>
+                </View>
+                <View style={s.listTagsRow}>
+                  {d.tags.map((t) => (
+                    <Pill key={t} color="#960000">
+                      {t}
+                    </Pill>
+                  ))}
+                </View>
               </View>
-            </View>
-            <View style={{ gap: 10, padding: 12 }}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Review ${d.name}`}
-                onPress={() => onReview(d)}
-                style={s.smallButton}
-              >
-                <Edit3 size={16} color={C.teal} />
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Remove ${d.name} from Drinklist`}
-                onPress={() => onRemove(d.id)}
-                style={[
-                  s.smallButton,
-                  { backgroundColor: "rgba(255,164,164,.8)" },
-                ]}
-              >
-                <X size={17} color={C.teal} />
-              </Pressable>
+              <View style={s.listActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Review ${d.name}`}
+                  onPress={() => onReview(d)}
+                  style={s.smallButton}
+                >
+                  <Edit3 size={16} color={C.teal} />
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${d.name} from Drinklist`}
+                  onPress={() => onRemove(d.id)}
+                  style={[
+                    s.smallButton,
+                    { backgroundColor: "rgba(255,164,164,.7)" },
+                  ]}
+                >
+                  <X size={17} color={C.teal} />
+                </Pressable>
+              </View>
             </View>
           </Pressable>
         ))}
@@ -1093,57 +2175,211 @@ function Drinklist({
 
 function ReviewCard({
   review,
+  liked,
   onLike,
+  onOpen,
 }: {
   review: Review;
+  liked: boolean;
   onLike: (id: string) => void;
+  onOpen: (review: Review) => void;
 }) {
   return (
     <View style={s.reviewCard}>
-      <View style={s.inline}>
-        <Image source={review.avatar} style={s.avatar} />
-        <View style={{ flex: 1 }}>
-          <Text style={s.body}>{review.user}</Text>
-          <Rating value={review.rating} />
-        </View>
-        <Text style={s.tiny}>{review.date}</Text>
-      </View>
-      <Text style={[s.reviewText, { marginVertical: 9 }]}>{review.text}</Text>
-      <View style={[s.inline, { justifyContent: "space-between" }]}>
-        <View style={s.inline}>
-          {review.tags.map((t) => (
-            <Pill key={t} color="#960000">
-              {t}
-            </Pill>
-          ))}
-        </View>
-        <View style={s.inline}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Open ${review.comments} comments`}
-            onPress={() =>
-              Alert.alert(
-                "Comments",
-                review.comments
-                  ? `${review.comments} people commented on this review.`
-                  : "Be the first to comment on this review.",
-              )
-            }
-          >
-            <MessageCircle size={13} />
-          </Pressable>
-          <Text style={s.tiny}>{review.comments}</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Like ${review.user}'s review`}
-            onPress={() => onLike(review.id)}
-          >
-            <Heart size={13} />
-          </Pressable>
-          <Text style={s.tiny}>{review.likes}</Text>
+      <View style={s.reviewFront}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${review.user}'s review and comments`}
+          onPress={() => onOpen(review)}
+        >
+          <View style={s.inline}>
+            <Image source={review.avatar} style={s.avatar} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.body}>{review.user}</Text>
+              <Rating value={review.rating} />
+            </View>
+            <Text style={s.tiny}>{review.date}</Text>
+          </View>
+          <Text style={[s.reviewText, { marginVertical: 9 }]}>
+            {review.text}
+          </Text>
+        </Pressable>
+        <View style={[s.inline, { justifyContent: "space-between" }]}>
+          <View style={s.inline}>
+            {review.tags.map((t) => (
+              <Pill key={t} color="#960000">
+                {t}
+              </Pill>
+            ))}
+          </View>
+          <View style={s.inline}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${review.comments} comments`}
+              onPress={() => onOpen(review)}
+            >
+              <MessageCircle size={13} color={C.ink} />
+            </Pressable>
+            <Text style={s.tiny}>{review.comments}</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                liked
+                  ? `Unlike ${review.user}'s review`
+                  : `Like ${review.user}'s review`
+              }
+              onPress={() => onLike(review.id)}
+            >
+              <Heart
+                size={13}
+                color={liked ? C.red : C.ink}
+                fill={liked ? C.red : "transparent"}
+              />
+            </Pressable>
+            <Text style={s.tiny}>{review.likes}</Text>
+          </View>
         </View>
       </View>
     </View>
+  );
+}
+
+function ReviewDetailScreen({
+  review,
+  drink,
+  liked,
+  comments,
+  onBack,
+  onLike,
+  onAddComment,
+}: {
+  review: Review;
+  drink: Drink;
+  liked: boolean;
+  comments: ReviewComment[];
+  onBack: () => void;
+  onLike: () => void;
+  onAddComment: (text: string) => void;
+}) {
+  const [comment, setComment] = useState("");
+  const submitComment = () => {
+    const nextComment = comment.trim();
+    if (!nextComment) return;
+    onAddComment(nextComment);
+    setComment("");
+  };
+  return (
+    <Background>
+      <Heading back onBack={onBack}>
+        Review
+      </Heading>
+      <ScrollView
+        style={s.screenScroll}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={s.reviewDetailContent}
+      >
+        <View style={s.reviewDetailDrinkStrip}>
+          <GlassLayers radius={20} intensity={36} />
+          <View style={s.reviewDetailImageBox}>
+            <Image
+              source={drink.image}
+              resizeMode="contain"
+              style={[
+                s.reviewDetailDrinkImage,
+                drink.id === "sprite" && s.spriteReviewDetailImage,
+              ]}
+            />
+          </View>
+          <View style={s.reviewDetailDrinkCopy}>
+            <Text style={s.cardTitle}>{drink.name}</Text>
+            <Text style={[s.body, { color: drink.typeColor }]}>
+              {drink.type}
+            </Text>
+          </View>
+        </View>
+
+        <View style={s.reviewDetailDepth}>
+          <View style={s.reviewDetailCard}>
+            <View style={s.inline}>
+              <Image source={review.avatar} style={s.reviewDetailAvatar} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.cardTitle}>{review.user}</Text>
+                <Rating value={review.rating} size={18} />
+              </View>
+              <Text style={s.tiny}>{review.date}</Text>
+            </View>
+            <Text style={s.reviewDetailText}>{review.text}</Text>
+            <View style={s.reviewDetailFooter}>
+              <View style={s.inline}>
+                {review.tags.map((tag) => (
+                  <Pill key={tag} color="#960000">
+                    {tag}
+                  </Pill>
+                ))}
+              </View>
+              <View style={s.inline}>
+                <MessageCircle size={16} color={C.ink} />
+                <Text style={s.body}>{review.comments}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={liked ? "Unlike review" : "Like review"}
+                  onPress={onLike}
+                  style={s.reviewDetailLikeButton}
+                >
+                  <Heart
+                    size={18}
+                    color={liked ? C.red : C.ink}
+                    fill={liked ? C.red : "transparent"}
+                  />
+                  <Text style={[s.body, liked && { color: C.red }]}>
+                    {review.likes}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <Text style={s.reviewCommentsTitle}>Comments ({comments.length})</Text>
+        {comments.length ? (
+          comments.map((item) => (
+            <View key={item.id} style={s.commentCard}>
+              <Image source={item.avatar} style={s.commentAvatar} />
+              <View style={s.commentCopy}>
+                <View style={s.commentHeader}>
+                  <Text style={s.body}>{item.user}</Text>
+                  <Text style={s.tiny}>{item.date}</Text>
+                </View>
+                <Text style={s.reviewText}>{item.text}</Text>
+              </View>
+            </View>
+          ))
+        ) : (
+          <Text style={s.reviewNoComments}>Be the first to comment.</Text>
+        )}
+        <View style={s.commentComposer}>
+          <TextInput
+            value={comment}
+            onChangeText={setComment}
+            placeholder="Write a comment..."
+            placeholderTextColor="rgba(32,26,27,.42)"
+            style={s.commentInput}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Post comment"
+            disabled={!comment.trim()}
+            onPress={submitComment}
+            style={[
+              s.commentSubmit,
+              !comment.trim() && s.commentSubmitDisabled,
+            ]}
+          >
+            <Text style={s.primaryText}>Post</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </Background>
   );
 }
 
@@ -1155,6 +2391,8 @@ function DrinkProfile({
   onReview,
   onToggle,
   onLike,
+  likedReviewIds,
+  onOpenReview,
 }: {
   drink: Drink;
   reviews: Review[];
@@ -1163,11 +2401,12 @@ function DrinkProfile({
   onReview: () => void;
   onToggle: () => void;
   onLike: (id: string) => void;
+  likedReviewIds: string[];
+  onOpenReview: (review: Review) => void;
 }) {
   const mine = reviews.filter((r) => r.drinkId === drink.id);
-  const avg = mine.length
-    ? mine.reduce((a, b) => a + b.rating, 0) / mine.length
-    : drink.rating;
+  const avg = drink.rating;
+  const totalReviews = reviewTotals[drink.id] || mine.length;
   const popularTags = Object.entries(
     mine
       .flatMap((review) => review.tags)
@@ -1190,9 +2429,14 @@ function DrinkProfile({
           Drink Profile
         </Heading>
         <View style={s.hero}>
+          <GlassLayers
+            radius={23}
+            intensity={30}
+            colors={["rgba(255,255,255,.36)", "rgba(4,178,100,.12)"]}
+          />
           <Image
             source={drink.image}
-            style={s.heroImage}
+            style={[s.heroImage, drink.id === "sprite" && s.spriteHeroImage]}
             resizeMode="contain"
           />
           <View style={s.heroPill}>
@@ -1200,38 +2444,41 @@ function DrinkProfile({
           </View>
         </View>
         <View style={s.detailCard}>
+          <GlassLayers
+            radius={23}
+            intensity={40}
+            colors={["rgba(255,255,255,.28)", "rgba(4,178,100,.15)"]}
+          />
           <Text style={s.detailTitle}>{drink.name}</Text>
           <Text style={s.inlineText}>
-            {"★".repeat(Math.round(avg))} {avg.toFixed(1)} — {mine.length || 56}{" "}
+            {"★".repeat(Math.round(avg))} {avg.toFixed(1)} — {totalReviews}{" "}
             Reviews
           </Text>
           <Text style={[s.body, { marginVertical: 14 }]}>
             {drink.description}
           </Text>
-          <View style={[s.inline, { justifyContent: "space-between" }]}>
-            <View>
-              <Text style={s.body}>
-                Origin :{" "}
-                <Text style={{ color: C.teal }}>
-                  {drink.origin || "International"}
-                </Text>
+          <View style={s.detailMeta}>
+            <Text style={s.body}>
+              Origin :{" "}
+              <Text style={{ color: C.teal }}>
+                {drink.origin || "International"}
               </Text>
-              <Text style={s.body}>
-                Brand :{" "}
-                <Text style={{ color: C.teal }}>
-                  {drink.brand || drink.name}
-                </Text>
+            </Text>
+            <Text style={s.body}>
+              Brand :{" "}
+              <Text style={{ color: C.teal }}>
+                {drink.brand || drink.name}
               </Text>
-            </View>
-            <View>
-              <Text style={s.body}>Official tags</Text>
-              <View style={s.inline}>
-                {drink.tags.map((t) => (
-                  <Pill key={t} color="#960000">
-                    {t}
-                  </Pill>
-                ))}
-              </View>
+            </Text>
+          </View>
+          <View style={s.officialTagsSection}>
+            <Text style={s.body}>Official tags</Text>
+            <View style={s.officialTagsWrap}>
+              {drink.tags.map((t) => (
+                <Pill key={t} color="#960000">
+                  {t}
+                </Pill>
+              ))}
             </View>
           </View>
         </View>
@@ -1267,7 +2514,13 @@ function DrinkProfile({
           <Text style={s.commonTagsText}>{commonUserTags.join("  ·  ")}</Text>
         </View>
         {mine.map((r) => (
-          <ReviewCard key={r.id} review={r} onLike={onLike} />
+          <ReviewCard
+            key={r.id}
+            review={r}
+            liked={likedReviewIds.includes(r.id)}
+            onLike={onLike}
+            onOpen={onOpenReview}
+          />
         ))}
       </ScrollView>
     </Background>
@@ -1312,11 +2565,16 @@ function ReviewScreen({
             Review
           </Heading>
           <View style={[s.reviewDrink, glass]}>
-            <Image
-              source={drink.image}
-              style={s.reviewDrinkImage}
-              resizeMode="contain"
-            />
+            <View style={s.reviewDrinkImageBox}>
+              <Image
+                source={drink.image}
+                style={[
+                  s.reviewDrinkImage,
+                  drink.id === "sprite" && s.spriteReviewImage,
+                ]}
+                resizeMode="contain"
+              />
+            </View>
             <View>
               <Text style={s.detailTitle}>{drink.name}</Text>
               <Pill color={drink.typeColor}>{drink.type}</Pill>
@@ -1527,7 +2785,9 @@ function Profile({
   setBadgeTab,
   onGo,
   onReview,
+  onOpenReview,
   onEdit,
+  onSettings,
 }: {
   name: string;
   reviews: Review[];
@@ -1535,7 +2795,9 @@ function Profile({
   setBadgeTab: (b: boolean) => void;
   onGo: (s: Screen) => void;
   onReview: (d: Drink) => void;
+  onOpenReview: (review: Review) => void;
   onEdit: () => void;
+  onSettings: () => void;
 }) {
   const my = reviews.filter((r) => r.user === name || r.user === "Mark Kelly");
   const earned = Math.min(9, Math.max(2, my.length + 1));
@@ -1567,29 +2829,27 @@ function Profile({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Profile settings"
-          onPress={() =>
-            Alert.alert(
-              "Profile settings",
-              "Your account, Drinklist and reviews are saved on this device.",
-            )
-          }
+          onPress={onSettings}
           style={s.headerIcon}
         >
           <Settings color={C.red} />
         </Pressable>
       </View>
       <View style={[s.profileCard, glass]}>
+        <GlassLayers radius={23} intensity={40} />
         <Image
           source={require("./assets/people/mark.png")}
           style={s.profileAvatar}
         />
-        <View style={{ flex: 1 }}>
+        <View style={s.profileDetails}>
           <Text style={s.cardTitle}>{name || "Mark Kelly"}</Text>
           <Text style={s.tiny}>Date Joined: 10 Jun 2026</Text>
         </View>
-        <Pill color={C.green} onPress={onEdit}>
-          Edit
-        </Pill>
+        <View style={s.profileEditWrap}>
+          <Pill color={C.green} onPress={onEdit}>
+            Edit
+          </Pill>
+        </View>
       </View>
       <View style={[s.inline, { marginHorizontal: 32 }]}>
         <Pressable
@@ -1598,6 +2858,7 @@ function Profile({
           onPress={() => setBadgeTab(false)}
           style={[s.tab, !badgeTab && s.tabActive]}
         >
+          {badgeTab && <GlassLayers radius={23} intensity={35} />}
           <Text style={[s.primaryText, badgeTab && { color: "#666" }]}>
             Reviews
           </Text>
@@ -1608,6 +2869,7 @@ function Profile({
           onPress={() => setBadgeTab(true)}
           style={[s.tab, badgeTab && s.tabActive]}
         >
+          {!badgeTab && <GlassLayers radius={23} intensity={35} />}
           <Text style={[s.primaryText, !badgeTab && { color: "#666" }]}>
             Badges
           </Text>
@@ -1665,11 +2927,13 @@ function Profile({
           contentContainerStyle={{ paddingBottom: 125 }}
         >
           <View style={s.stats}>
-            <View style={[s.stat, glass]}>
+            <View style={s.stat}>
+              <GlassLayers radius={23} intensity={40} />
               <Text style={s.statNumber}>{my.length} 🍷</Text>
               <Text style={s.cardTitle}>Drinks Tried</Text>
             </View>
-            <View style={[s.stat, glass]}>
+            <View style={s.stat}>
+              <GlassLayers radius={23} intensity={40} />
               <Text style={s.statNumber}>{avg.toFixed(1)} ★</Text>
               <Text style={s.cardTitle}>Avg. Rating</Text>
             </View>
@@ -1700,30 +2964,52 @@ function Profile({
               {my.map((r, i) => {
                 const d = drinks.find((x) => x.id === r.drinkId)!;
                 return (
-                  <Pressable
+                  <View
                     key={r.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Edit review for ${d?.name}`}
-                    onPress={() => onReview(d)}
-                    style={{ marginTop: 16 }}
+                    style={[
+                      s.receiptItem,
+                      i < my.length - 1 && s.receiptItemDivider,
+                    ]}
                   >
                     <View
                       style={[s.inline, { justifyContent: "space-between" }]}
                     >
-                      <Text style={s.body}>
-                        {i + 1} {d?.name} ✎
-                      </Text>
-                      <Text style={{ color: "#e3a000" }}>
-                        {"★".repeat(Math.round(r.rating))}
-                      </Text>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Open review for ${d?.name}`}
+                        onPress={() => onOpenReview(r)}
+                        style={s.receiptItemCopy}
+                      >
+                        <Text style={s.body}>
+                          {i + 1} {d?.name}
+                        </Text>
+                        <Text style={s.tiny}> {r.date}</Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Edit review for ${d?.name}`}
+                        onPress={() => onReview(d)}
+                        style={s.receiptEditButton}
+                      >
+                        <Edit3 size={12} color={C.red} />
+                      </Pressable>
+                      <View style={s.receiptRating}>
+                        <Text style={s.receiptStars}>
+                          {"★".repeat(Math.round(r.rating))}
+                        </Text>
+                        <Text style={s.receiptRatingNumber}>
+                          {r.rating.toFixed(1)}
+                        </Text>
+                      </View>
                     </View>
-                    <Text style={s.tiny}> {r.date}</Text>
-                    <Text
-                      style={[s.reviewText, { marginLeft: 30, marginTop: 5 }]}
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Read ${d?.name} review`}
+                      onPress={() => onOpenReview(r)}
                     >
-                      “{r.text}”
-                    </Text>
-                  </Pressable>
+                      <Text style={s.receiptReviewText}>“{r.text}”</Text>
+                    </Pressable>
+                  </View>
                 );
               })}
             </View>
@@ -1731,6 +3017,153 @@ function Profile({
         </ScrollView>
       )}
       <BottomNav active="profile" onGo={onGo} />
+    </Background>
+  );
+}
+
+function SettingsOption({
+  icon,
+  title,
+  subtitle,
+  onPress,
+  danger = false,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      onPress={onPress}
+      style={[s.settingsOption, danger && s.settingsDangerOption]}
+    >
+      <View style={[s.settingsOptionIcon, danger && s.settingsDangerIcon]}>
+        {icon}
+      </View>
+      <View style={s.settingsOptionCopy}>
+        <Text style={[s.settingsOptionTitle, danger && { color: C.red }]}>
+          {title}
+        </Text>
+        <Text style={s.settingsOptionSubtitle}>{subtitle}</Text>
+      </View>
+      {!danger && <ChevronRight size={18} color="rgba(43,73,89,.55)" />}
+    </Pressable>
+  );
+}
+
+function SettingsScreen({
+  name,
+  requestCount,
+  onBack,
+  onRequest,
+  onLogout,
+}: {
+  name: string;
+  requestCount: number;
+  onBack: () => void;
+  onRequest: () => void;
+  onLogout: () => void;
+}) {
+  return (
+    <Background>
+      <Heading back onBack={onBack}>
+        Settings
+      </Heading>
+      <ScrollView
+        style={s.screenScroll}
+        contentContainerStyle={s.settingsContent}
+      >
+        <View style={[s.settingsAccountCard, glass]}>
+          <Image
+            source={require("./assets/people/mark.png")}
+            style={s.settingsAvatar}
+          />
+          <View style={s.settingsAccountCopy}>
+            <Text style={s.cardTitle}>{name || "Mark Kelly"}</Text>
+            <Text style={s.tiny}>21+ verified account</Text>
+          </View>
+        </View>
+
+        <Text style={s.settingsSectionTitle}>Account & privacy</Text>
+        <View style={s.settingsGroup}>
+          <SettingsOption
+            icon={<Users size={20} color={C.teal} />}
+            title="Account details"
+            subtitle="Profile, sign-in and age-verification details"
+            onPress={() =>
+              Alert.alert(
+                "Account details",
+                `${name || "Mark Kelly"}\nYour profile is saved securely on this device.`,
+              )
+            }
+          />
+          <SettingsOption
+            icon={<Scale size={20} color={C.teal} />}
+            title="GDPR regulations"
+            subtitle="Privacy, data access, consent and deletion"
+            onPress={() =>
+              Alert.alert(
+                "GDPR & your data",
+                "You can request a copy of your data, correct it, withdraw consent, or ask for deletion. Saturated only stores the information needed to run your account.",
+              )
+            }
+          />
+          <SettingsOption
+            icon={<Info size={20} color={C.teal} />}
+            title="About the app"
+            subtitle="Learn about Saturated and this version"
+            onPress={() =>
+              Alert.alert(
+                "About Saturated",
+                "Saturated helps you discover beverages, save favourites, review drinks and follow friends. Version 1.0.0.",
+              )
+            }
+          />
+        </View>
+
+        <Text style={s.settingsSectionTitle}>Community</Text>
+        <View style={s.settingsGroup}>
+          <SettingsOption
+            icon={<CirclePlus size={20} color={C.teal} />}
+            title="Request a drink"
+            subtitle={
+              requestCount
+                ? `${requestCount} request${requestCount === 1 ? "" : "s"} submitted`
+                : "Suggest a missing beverage"
+            }
+            onPress={onRequest}
+          />
+          <SettingsOption
+            icon={<Camera size={20} color={C.teal} />}
+            title="Instagram & socials"
+            subtitle="Follow Saturated on social media"
+            onPress={() =>
+              Linking.openURL("https://www.instagram.com/").catch(() =>
+                Alert.alert("Instagram", "Instagram could not be opened."),
+              )
+            }
+          />
+        </View>
+
+        <View style={[s.settingsGroup, { marginTop: 22 }]}>
+          <SettingsOption
+            icon={<LogOut size={20} color={C.red} />}
+            title="Log out"
+            subtitle="Return to the Saturated sign-in screen"
+            danger
+            onPress={() =>
+              Alert.alert("Log out?", "You can sign back in at any time.", [
+                { text: "Cancel", style: "cancel" },
+                { text: "Log out", style: "destructive", onPress: onLogout },
+              ])
+            }
+          />
+        </View>
+      </ScrollView>
     </Background>
   );
 }
@@ -1949,10 +3382,21 @@ export default function App() {
   const [name, setName] = useState("Mark Kelly");
   const [saved, setSaved] = useState(["aperol", "sprite", "hophouse"]);
   const [reviews, setReviews] = useState(initialReviews);
+  const [likedReviews, setLikedReviews] = useState<string[]>([]);
+  const [commentThreads, setCommentThreads] = useState<
+    Record<string, ReviewComment[]>
+  >(initialCommentThreads);
   const [selected, setSelected] = useState(drinks[0]);
+  const [selectedReviewId, setSelectedReviewId] = useState(
+    initialReviews[0].id,
+  );
+  const [reviewDetailReturn, setReviewDetailReturn] = useState<Screen>("drink");
   const [badgeTab, setBadgeTab] = useState(false);
   const [searchReturn, setSearchReturn] = useState<Screen>("explore");
   const [drinkReturn, setDrinkReturn] = useState<Screen>("explore");
+  const [requestReturn, setRequestReturn] = useState<Screen>("search");
+  const [requestDraft, setRequestDraft] = useState("");
+  const [requests, setRequests] = useState<string[]>([]);
   const [onboarded, setOnboarded] = useState(false);
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -1963,7 +3407,10 @@ export default function App() {
           setOnboarded(true);
           setName(x.name || "Mark Kelly");
           setSaved(x.saved || []);
-          setReviews(x.reviews || initialReviews);
+          setReviews(mergeSeedReviews(x.reviews));
+          setLikedReviews(x.likedReviews || []);
+          setCommentThreads(mergeSeedCommentThreads(x.commentThreads));
+          setRequests(x.requests || []);
           setScreen("explore");
         } else {
           setScreen("splash");
@@ -1977,12 +3424,39 @@ export default function App() {
       .finally(() => setReady(true));
   }, []);
   useEffect(() => {
+    if (!ready) return;
+    setReviews((current) => {
+      const merged = mergeSeedReviews(current);
+      return merged.length === current.length &&
+        merged.every((review, index) => review === current[index])
+        ? current
+        : merged;
+    });
+  }, [ready]);
+  useEffect(() => {
     if (ready)
       AsyncStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ onboarded, name, saved, reviews }),
+        JSON.stringify({
+          onboarded,
+          name,
+          saved,
+          reviews,
+          likedReviews,
+          commentThreads,
+          requests,
+        }),
       );
-  }, [ready, onboarded, name, saved, reviews]);
+  }, [
+    ready,
+    onboarded,
+    name,
+    saved,
+    reviews,
+    likedReviews,
+    commentThreads,
+    requests,
+  ]);
   const go = (nextScreen: Screen) => {
     if (nextScreen === "search") setSearchReturn(screen);
     setScreen(nextScreen);
@@ -1997,18 +3471,64 @@ export default function App() {
     setSelected(d);
     setScreen("review");
   };
+  const openReview = (reviewToOpen: Review) => {
+    setReviewDetailReturn(screen);
+    setSelectedReviewId(reviewToOpen.id);
+    setSelected(
+      drinks.find((drink) => drink.id === reviewToOpen.drinkId) || drinks[0],
+    );
+    setScreen("reviewDetail");
+  };
+  const requestDrink = (returnScreen: Screen, initialName = "") => {
+    setRequestReturn(returnScreen);
+    setRequestDraft(initialName);
+    setScreen("request");
+  };
   const toggle = (id: string) =>
     setSaved((x) => (x.includes(id) ? x.filter((y) => y !== id) : [...x, id]));
   const like = (id: string) =>
-    setReviews((x) =>
-      x.map((r) => (r.id === id ? { ...r, likes: r.likes + 1 } : r)),
+    setLikedReviews((current) => {
+      const alreadyLiked = current.includes(id);
+      setReviews((allReviews) =>
+        allReviews.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                likes: Math.max(0, item.likes + (alreadyLiked ? -1 : 1)),
+              }
+            : item,
+        ),
+      );
+      return alreadyLiked
+        ? current.filter((reviewId) => reviewId !== id)
+        : [...current, id];
+    });
+  const addComment = (reviewId: string, text: string) => {
+    const newComment: ReviewComment = {
+      id: `${reviewId}-${Date.now()}`,
+      user: name || "Mark Kelly",
+      avatar: require("./assets/people/mark.png"),
+      text,
+      date: "Now",
+    };
+    setCommentThreads((current) => ({
+      ...current,
+      [reviewId]: [...(current[reviewId] || []), newComment],
+    }));
+    setReviews((current) =>
+      current.map((item) =>
+        item.id === reviewId ? { ...item, comments: item.comments + 1 } : item,
+      ),
     );
+  };
   if (!dm || !bold || !ready)
     return (
       <View style={s.loader}>
         <ActivityIndicator color={C.red} />
       </View>
     );
+  const selectedReview =
+    reviews.find((item) => item.id === selectedReviewId) || reviews[0];
   let body: React.ReactNode;
   if (screen === "splash") body = <Splash />;
   else if (screen === "explore")
@@ -2020,6 +3540,23 @@ export default function App() {
         onBack={() => go(searchReturn)}
         onOpen={open}
         onToggle={toggle}
+        onRequest={(drinkName) => requestDrink("search", drinkName)}
+      />
+    );
+  else if (screen === "request")
+    body = (
+      <RequestDrinkScreen
+        initialName={requestDraft}
+        onBack={() => setScreen(requestReturn)}
+        onSubmit={(drinkName) =>
+          setRequests((current) =>
+            current.some(
+              (request) => request.toLowerCase() === drinkName.toLowerCase(),
+            )
+              ? current
+              : [...current, drinkName],
+          )
+        }
       />
     );
   else if (screen === "drinklist")
@@ -2042,6 +3579,23 @@ export default function App() {
         onReview={() => review(selected)}
         onToggle={() => toggle(selected.id)}
         onLike={like}
+        likedReviewIds={likedReviews}
+        onOpenReview={openReview}
+      />
+    );
+  else if (screen === "reviewDetail")
+    body = (
+      <ReviewDetailScreen
+        review={selectedReview}
+        drink={
+          drinks.find((drink) => drink.id === selectedReview.drinkId) ||
+          drinks[0]
+        }
+        liked={likedReviews.includes(selectedReview.id)}
+        comments={commentThreads[selectedReview.id] || []}
+        onBack={() => setScreen(reviewDetailReturn)}
+        onLike={() => like(selectedReview.id)}
+        onAddComment={(text) => addComment(selectedReview.id, text)}
       />
     );
   else if (screen === "review")
@@ -2083,9 +3637,25 @@ export default function App() {
         setBadgeTab={setBadgeTab}
         onGo={go}
         onReview={review}
+        onOpenReview={openReview}
         onEdit={() => {
           setScreen("splash");
           setOnboard(true);
+        }}
+        onSettings={() => go("settings")}
+      />
+    );
+  else if (screen === "settings")
+    body = (
+      <SettingsScreen
+        name={name}
+        requestCount={requests.length}
+        onBack={() => go("profile")}
+        onRequest={() => requestDrink("settings")}
+        onLogout={() => {
+          setOnboarded(false);
+          setOnboard(true);
+          setScreen("splash");
         }}
       />
     );
@@ -2115,25 +3685,61 @@ const s = StyleSheet.create({
     width: Platform.OS === "web" ? FIGMA_FRAME_WIDTH : "100%",
     maxWidth: FIGMA_FRAME_WIDTH,
     marginHorizontal: "auto",
-    backgroundColor: C.cream,
+    backgroundColor: "#fff",
     overflow: "hidden",
   },
-  bg: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(234,248,209,.36)" },
+  bgWhite: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "#fff",
+  },
+  bgCream: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "rgba(255,250,228,.4)",
+  },
+  bgMint: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "rgba(234,248,209,.2)",
+  },
+  bgNoise: {
+    ...StyleSheet.absoluteFill,
+    opacity: 0.42,
+    ...(Platform.OS === "web"
+      ? ({
+          backgroundImage:
+            "radial-gradient(rgba(255,255,255,.72) .55px, transparent .7px), radial-gradient(rgba(43,73,89,.13) .45px, transparent .62px)",
+          backgroundSize: "3px 3px, 4px 4px",
+          backgroundPosition: "0 0, 1px 1px",
+        } as any)
+      : { backgroundColor: "rgba(255,255,255,.035)" }),
+  },
+  glassBlur: {
+    ...StyleSheet.absoluteFill,
+    overflow: "hidden",
+  },
+  glassGradient: {
+    ...StyleSheet.absoluteFill,
+  },
+  glassInnerEdge: {
+    ...StyleSheet.absoluteFill,
+    borderWidth: 0.5,
+    borderColor: "rgba(255,255,255,.8)",
+  },
   deviceStatusBar: {
     height: 22,
-    backgroundColor: "#292626",
-    paddingHorizontal: 10,
+    backgroundColor: "transparent",
+    paddingHorizontal: 24,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     zIndex: 20,
   },
   deviceStatusText: {
-    color: "#fff",
+    color: C.ink,
     fontFamily: F.bold,
     fontSize: 12,
     lineHeight: 14,
   },
+  deviceStatusTextLight: { color: "#fff" },
   loader: { flex: 1, alignItems: "center", justifyContent: "center" },
   screenList: { flex: 1, minHeight: 0 },
   screenScroll: { flex: 1, minHeight: 0 },
@@ -2283,7 +3889,21 @@ const s = StyleSheet.create({
     alignItems: "center",
     padding: 10,
   },
+  searchResultImageBox: {
+    width: 62,
+    height: 76,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   searchResultImage: { width: 62, height: 76 },
+  spriteSearchImage: {
+    position: "absolute",
+    width: 151,
+    height: 103,
+    left: -28,
+    top: -14,
+  },
   searchResultCopy: { flex: 1, gap: 4, paddingHorizontal: 12 },
   searchResultName: { fontFamily: F.bold, fontSize: 16, color: C.ink },
   searchSaveButton: {
@@ -2310,6 +3930,77 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  requestPageContent: {
+    paddingHorizontal: 32,
+    paddingTop: 18,
+    paddingBottom: 40,
+  },
+  requestFormCard: {
+    borderRadius: 26,
+    padding: 24,
+    backgroundColor: "rgba(255,254,248,.94)",
+    alignItems: "stretch",
+  },
+  requestIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(204,36,44,.1)",
+    marginBottom: 16,
+  },
+  requestFormTitle: {
+    fontFamily: F.display,
+    fontSize: 22,
+    color: C.red,
+    textAlign: "center",
+  },
+  requestFormCopy: {
+    fontFamily: F.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: "rgba(32,26,27,.72)",
+    textAlign: "center",
+    marginTop: 10,
+    marginBottom: 24,
+  },
+  requestInputLabel: {
+    fontFamily: F.bold,
+    fontSize: 12,
+    color: C.ink,
+    marginBottom: 7,
+  },
+  requestNameInput: {
+    height: 50,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(43,73,89,.28)",
+    backgroundColor: "#fff",
+    paddingHorizontal: 15,
+    fontFamily: F.medium,
+    fontSize: 14,
+    color: C.ink,
+  },
+  requestSubmit: { height: 46, marginTop: 18 },
+  disabledButton: { opacity: 0.38 },
+  requestSuccess: {
+    marginTop: 16,
+    padding: 13,
+    borderRadius: 14,
+    backgroundColor: "rgba(4,178,100,.12)",
+    borderWidth: 1,
+    borderColor: "rgba(4,178,100,.28)",
+  },
+  requestSuccessTitle: { fontFamily: F.bold, fontSize: 12, color: C.green },
+  requestSuccessText: {
+    fontFamily: F.regular,
+    fontSize: 11,
+    lineHeight: 15,
+    color: C.ink,
+    marginTop: 3,
+  },
   profileSearchCard: {
     ...glass,
     minHeight: 88,
@@ -2321,17 +4012,38 @@ const s = StyleSheet.create({
   profileSearchAvatar: { width: 58, height: 58, borderRadius: 29 },
   grid: { paddingHorizontal: 32, paddingTop: 20, paddingBottom: 130, gap: 22 },
   drinkCard: {
-    ...glass,
     width: 110,
     height: 187,
     borderRadius: 16,
-    backgroundColor: "rgba(250,255,242,.9)",
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
+  },
+  drinkCardSurface: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,.1)",
+  },
+  drinkGlow: { ...StyleSheet.absoluteFill },
+  drinkImageFrame: {
+    width: 110,
+    height: 154,
     overflow: "hidden",
   },
   drinkImage: { width: "100%", height: 154 },
+  spriteExploreImage: {
+    position: "absolute",
+    width: 424,
+    height: 286,
+    left: -99,
+    top: -61,
+  },
   drinkLabel: {
     height: 33,
-    backgroundColor: "rgba(255,255,255,.86)",
+    backgroundColor: "rgba(255,255,255,.8)",
     alignItems: "center",
     paddingTop: 3,
   },
@@ -2356,43 +4068,93 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   nav: {
-    ...glass,
     position: "absolute",
     left: 33,
     right: 33,
     bottom: 34,
     height: 80,
     borderRadius: 24,
+    borderWidth: 0.5,
+    borderColor: "rgba(255,255,255,.72)",
+    shadowColor: "#000",
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
     overflow: "hidden",
     flexDirection: "row",
   },
   navTint: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(4,178,100,.18)",
   },
+  navHighlight: { ...StyleSheet.absoluteFill },
   navItem: { flex: 1, alignItems: "center", justifyContent: "center" },
   navActive: { backgroundColor: "rgba(0,0,0,.3)" },
   navText: { fontFamily: F.display, fontSize: 16, color: C.teal },
   listCard: {
-    ...glass,
     height: 110,
     borderRadius: 23,
     marginBottom: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  listCardSurface: {
+    flex: 1,
     flexDirection: "row",
     overflow: "hidden",
+    borderRadius: 23,
+    borderWidth: 0.5,
+    borderColor: "rgba(255,255,255,.8)",
   },
   listImageBox: {
     width: 77,
-    backgroundColor: "rgba(244,250,228,.45)",
+    backgroundColor: "rgba(244,250,228,.2)",
     alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
-  listImage: { width: 62, height: 86, marginTop: 8 },
+  listImage: { width: 56, height: 72 },
+  spriteListImage: {
+    position: "absolute",
+    width: 221,
+    height: 149,
+    left: -42,
+    top: -14,
+  },
+  listDetails: {
+    flex: 1,
+    paddingTop: 7,
+    paddingLeft: 12,
+    paddingRight: 4,
+  },
+  listMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 7,
+  },
+  listTagsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 11,
+  },
+  listActions: {
+    width: 54,
+    paddingTop: 16,
+    paddingRight: 21,
+    alignItems: "flex-end",
+    gap: 11,
+  },
   smallButton: {
     ...glass,
     width: 33,
     height: 33,
     borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,.7)",
+    backgroundColor: "rgba(255,255,255,.8)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2408,8 +4170,10 @@ const s = StyleSheet.create({
     height: 275,
     marginHorizontal: 35,
     borderRadius: 23,
-    backgroundColor: "rgba(250,255,242,.75)",
+    backgroundColor: "rgba(250,255,242,.36)",
+    borderColor: "rgba(4,178,100,.18)",
     position: "relative",
+    overflow: "hidden",
   },
   heroImage: {
     position: "absolute",
@@ -2419,6 +4183,13 @@ const s = StyleSheet.create({
     width: "100%",
     height: 240,
   },
+  spriteHeroImage: {
+    width: 669,
+    height: 501,
+    left: -52,
+    right: undefined,
+    top: -78,
+  },
   heroPill: { position: "absolute", left: 14, top: 14, zIndex: 2 },
   detailCard: {
     ...glass,
@@ -2427,16 +4198,169 @@ const s = StyleSheet.create({
     marginBottom: 5,
     borderRadius: 23,
     padding: 21,
+    overflow: "hidden",
+  },
+  detailMeta: { gap: 3 },
+  officialTagsSection: { marginTop: 14, gap: 8 },
+  officialTagsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+    width: "100%",
   },
   detailTitle: { fontFamily: F.bold, fontSize: 28, color: C.ink },
   reviewCard: {
-    ...glass,
     marginHorizontal: 32,
     marginBottom: 14,
+    borderRadius: 16,
+    paddingBottom: 7,
+    backgroundColor: "rgba(4,178,100,.2)",
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  reviewFront: {
+    minHeight: 154,
     borderRadius: 16,
     padding: 20,
     backgroundColor: C.cream,
   },
+  reviewDetailContent: {
+    paddingHorizontal: 32,
+    paddingBottom: 46,
+  },
+  reviewDetailDrinkStrip: {
+    height: 84,
+    borderRadius: 20,
+    overflow: "hidden",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  reviewDetailImageBox: {
+    width: 52,
+    height: 66,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reviewDetailDrinkImage: { width: 48, height: 62 },
+  spriteReviewDetailImage: {
+    position: "absolute",
+    width: 190,
+    height: 128,
+    left: -46,
+    top: -28,
+  },
+  reviewDetailDrinkCopy: { flex: 1, gap: 4, marginLeft: 12 },
+  reviewDetailDepth: {
+    marginTop: 18,
+    paddingBottom: 8,
+    borderRadius: 20,
+    backgroundColor: "rgba(4,178,100,.2)",
+    shadowColor: "#000",
+    shadowOpacity: 0.24,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  reviewDetailCard: {
+    borderRadius: 20,
+    padding: 22,
+    backgroundColor: C.cream,
+  },
+  reviewDetailAvatar: { width: 42, height: 42, borderRadius: 21 },
+  reviewDetailText: {
+    fontFamily: F.regular,
+    fontSize: 15,
+    lineHeight: 21,
+    color: C.ink,
+    marginVertical: 22,
+  },
+  reviewDetailFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  reviewDetailLikeButton: {
+    minWidth: 46,
+    height: 32,
+    paddingHorizontal: 9,
+    borderRadius: 16,
+    backgroundColor: "rgba(204,36,44,.08)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  reviewCommentsTitle: {
+    fontFamily: F.bold,
+    fontSize: 16,
+    color: C.ink,
+    marginTop: 26,
+    marginBottom: 10,
+  },
+  commentCard: {
+    minHeight: 72,
+    borderRadius: 18,
+    padding: 13,
+    marginBottom: 10,
+    backgroundColor: "rgba(255,254,248,.82)",
+    borderWidth: 0.5,
+    borderColor: "rgba(255,255,255,.9)",
+    flexDirection: "row",
+    gap: 10,
+  },
+  commentAvatar: { width: 34, height: 34, borderRadius: 17 },
+  commentCopy: { flex: 1, gap: 6 },
+  commentHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  reviewNoComments: {
+    fontFamily: F.medium,
+    fontSize: 12,
+    color: "rgba(32,26,27,.58)",
+    marginBottom: 12,
+  },
+  commentComposer: {
+    minHeight: 54,
+    borderRadius: 21,
+    padding: 6,
+    paddingLeft: 14,
+    marginTop: 8,
+    backgroundColor: "rgba(255,255,255,.76)",
+    borderWidth: 1,
+    borderColor: "rgba(43,73,89,.18)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  commentInput: {
+    flex: 1,
+    height: 42,
+    fontFamily: F.medium,
+    fontSize: 12,
+    color: C.ink,
+    outlineStyle: "none",
+  } as any,
+  commentSubmit: {
+    minWidth: 68,
+    height: 42,
+    borderRadius: 18,
+    backgroundColor: C.red,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  commentSubmitDisabled: { opacity: 0.35 },
   reviewDrink: {
     height: 99,
     marginHorizontal: 33,
@@ -2446,7 +4370,22 @@ const s = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 15,
   },
-  reviewDrinkImage: { width: 55, height: 76, marginRight: 8 },
+  reviewDrinkImageBox: {
+    width: 55,
+    height: 76,
+    marginRight: 8,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reviewDrinkImage: { width: 55, height: 76 },
+  spriteReviewImage: {
+    position: "absolute",
+    width: 212,
+    height: 159,
+    left: -48,
+    top: -30,
+  },
   ratingCard: {
     height: 100,
     margin: 22,
@@ -2557,14 +4496,80 @@ const s = StyleSheet.create({
   profileCard: {
     height: 77,
     marginHorizontal: 33,
-    marginTop: 11,
+    marginTop: 21,
     borderRadius: 23,
-    padding: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    overflow: "hidden",
+  },
+  profileAvatar: { width: 55, height: 55, borderRadius: 28 },
+  profileDetails: {
+    flex: 1,
+    height: 55,
+    justifyContent: "center",
+    gap: 2,
+  },
+  profileEditWrap: {
+    height: 55,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  settingsContent: { paddingHorizontal: 32, paddingBottom: 40 },
+  settingsAccountCard: {
+    height: 82,
+    borderRadius: 23,
+    paddingHorizontal: 15,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
   },
-  profileAvatar: { width: 55, height: 55, borderRadius: 28 },
+  settingsAvatar: { width: 55, height: 55, borderRadius: 28 },
+  settingsAccountCopy: { flex: 1, gap: 5, justifyContent: "center" },
+  settingsSectionTitle: {
+    fontFamily: F.bold,
+    fontSize: 12,
+    color: C.ink,
+    marginTop: 22,
+    marginBottom: 8,
+  },
+  settingsGroup: {
+    backgroundColor: "rgba(255,254,248,.86)",
+    borderRadius: 20,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(43,73,89,.12)",
+  },
+  settingsOption: {
+    minHeight: 72,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(43,73,89,.12)",
+  },
+  settingsDangerOption: { borderBottomWidth: 0 },
+  settingsOptionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(43,73,89,.08)",
+  },
+  settingsDangerIcon: { backgroundColor: "rgba(204,36,44,.08)" },
+  settingsOptionCopy: { flex: 1, gap: 3 },
+  settingsOptionTitle: { fontFamily: F.bold, fontSize: 13, color: C.ink },
+  settingsOptionSubtitle: {
+    fontFamily: F.regular,
+    fontSize: 10,
+    lineHeight: 13,
+    color: "rgba(32,26,27,.62)",
+  },
   tab: {
     ...glass,
     height: 34,
@@ -2573,6 +4578,7 @@ const s = StyleSheet.create({
     borderRadius: 23,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
   tabActive: { backgroundColor: C.red },
   progressCard: {
@@ -2618,13 +4624,19 @@ const s = StyleSheet.create({
   },
   badgeComposite: { width: 88, height: 105 },
   badgeCompositeTall: { width: 88, height: 121 },
-  stats: { flexDirection: "row", gap: 10, marginHorizontal: 32, marginTop: 10 },
+  stats: { flexDirection: "row", gap: 10, marginHorizontal: 33, marginTop: 8 },
   stat: {
     height: 88,
-    flex: 1,
+    width: 182,
     borderRadius: 23,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
   },
   statNumber: { fontFamily: F.bold, fontSize: 30 },
   receiptWrap: {
@@ -2639,6 +4651,40 @@ const s = StyleSheet.create({
     backgroundColor: C.cream,
     padding: 20,
     position: "relative",
+  },
+  receiptItem: { marginTop: 16, paddingBottom: 16 },
+  receiptItemDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(32,26,27,.12)",
+  },
+  receiptItemCopy: { flex: 1, gap: 2 },
+  receiptEditButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(204,36,44,.07)",
+  },
+  receiptReviewText: {
+    fontFamily: F.regular,
+    fontSize: 12,
+    lineHeight: 15,
+    color: C.ink,
+    marginLeft: 30,
+    marginTop: 5,
+  },
+  receiptRating: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  receiptStars: { color: "#e3a000", fontSize: 12 },
+  receiptRatingNumber: {
+    fontFamily: F.bold,
+    fontSize: 10,
+    color: "rgba(32,26,27,.62)",
   },
   receiptShareButton: {
     position: "absolute",
@@ -2753,6 +4799,7 @@ const s = StyleSheet.create({
   onboard: {
     width: "100%",
     maxWidth: FIGMA_FRAME_WIDTH,
+    backgroundColor: "#fffef8",
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingHorizontal: 28,
@@ -2825,6 +4872,11 @@ const s = StyleSheet.create({
     marginHorizontal: "auto",
     backgroundColor: "#f30",
     overflow: "hidden",
+  },
+  splashImage: {
+    ...StyleSheet.absoluteFill,
+    width: "100%",
+    height: "100%",
   },
   splashShade: {
     ...StyleSheet.absoluteFill,
