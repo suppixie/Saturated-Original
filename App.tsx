@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "./lib/supabase";
 import {
   Boldonse_400Regular,
   useFonts as useBoldonse,
@@ -4806,6 +4807,7 @@ export default function App() {
           setEmail(details.email);
         }}
         onDeleteAccount={() => {
+          void supabase?.auth.signOut();
           AsyncStorage.removeItem(STORAGE_KEY).finally(() => {
             setName("Mark Kelly");
             setUsername("@markelly1");
@@ -4822,6 +4824,7 @@ export default function App() {
           });
         }}
         onLogout={() => {
+          void supabase?.auth.signOut();
           setOnboarded(false);
           setOnboard(true);
           setScreen("splash");

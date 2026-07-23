@@ -2,6 +2,7 @@
   "expo": {
     "name": "Saturated",
     "slug": "saturated",
+    "owner": "mamtha6",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -21,6 +22,11 @@
       "predictiveBackGestureEnabled": false
     },
     "scheme": "saturated",
+    "extra": {
+      "eas": {
+        "projectId": "3fa74864-3caf-47f1-a5f5-7f48d7515523"
+      }
+    },
     "web": {
       "favicon": "./assets/favicon.png"
     }
