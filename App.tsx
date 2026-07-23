@@ -64,6 +64,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -108,8 +109,8 @@ function createNoisePath(
   return path;
 }
 
-const BACKGROUND_NOISE_MINT = createNoisePath(72, 0x4b7a21, 0.08, 42, 42);
-const BACKGROUND_NOISE_LIGHT = createNoisePath(54, 0xf8e4c2, 0, 42, 42);
+const BACKGROUND_NOISE_MINT = createNoisePath(110, 0x4b7a21, 0.08, 42, 42);
+const BACKGROUND_NOISE_LIGHT = createNoisePath(84, 0xf8e4c2, 0, 42, 42);
 
 type Drink = {
   id: string;
@@ -1715,11 +1716,17 @@ const glass = {
   backgroundColor: "rgba(4,178,100,.15)",
   borderColor: "rgba(255,255,255,.5)",
   borderWidth: 0.35,
-  shadowColor: "#000",
-  shadowOpacity: 0.25,
-  shadowRadius: 4,
-  shadowOffset: { width: 0, height: 4 },
-  elevation: 5,
+  ...(Platform.OS === "android"
+    ? {
+        boxShadow: "0px 4px 4px rgba(0,0,0,0.28)",
+      }
+    : {
+        shadowColor: "#000",
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 5,
+      }),
 } as const;
 
 function GlassLayers({
@@ -1733,15 +1740,21 @@ function GlassLayers({
 }) {
   return (
     <>
-      <BlurView
-        pointerEvents="none"
-        intensity={intensity}
-        tint="light"
-        style={[s.glassBlur, { borderRadius: radius }]}
-      />
+      {Platform.OS !== "android" && (
+        <BlurView
+          pointerEvents="none"
+          intensity={intensity}
+          tint="light"
+          style={[s.glassBlur, { borderRadius: radius }]}
+        />
+      )}
       <LinearGradient
         pointerEvents="none"
-        colors={colors}
+        colors={
+          Platform.OS === "android"
+            ? ["rgba(255,255,255,.2)", "rgba(4,178,100,.1)"]
+            : colors
+        }
         start={{ x: 0.12, y: 0 }}
         end={{ x: 0.88, y: 1 }}
         style={[s.glassGradient, { borderRadius: radius }]}
@@ -2035,7 +2048,15 @@ function BottomNav({
   onGo: (x: Screen) => void;
 }) {
   return (
-    <BlurView intensity={48} tint="light" style={s.nav}>
+    <View style={s.nav}>
+      {Platform.OS !== "android" && (
+        <BlurView
+          pointerEvents="none"
+          intensity={48}
+          tint="light"
+          style={s.navBlur}
+        />
+      )}
       <LinearGradient
         pointerEvents="none"
         colors={["rgba(38,81,88,.22)", "rgba(4,178,100,.22)"]}
@@ -2061,7 +2082,43 @@ function BottomNav({
           </Text>
         </Pressable>
       ))}
-    </BlurView>
+    </View>
+  );
+}
+
+function ResponsiveAppFrame({ children }: { children: React.ReactNode }) {
+  const { width } = useWindowDimensions();
+  if (Platform.OS === "web") return <>{children}</>;
+
+  const scale = Math.min(1, width / FIGMA_FRAME_WIDTH);
+  const scaledWidth = FIGMA_FRAME_WIDTH * scale;
+  const scaledHeight = FIGMA_FRAME_HEIGHT * scale;
+
+  return (
+    <View style={s.nativeViewport}>
+      <View
+        style={[
+          s.nativeFrame,
+          {
+            width: scaledWidth,
+            height: scaledHeight,
+          },
+        ]}
+      >
+        <View
+          style={[
+            s.nativeCanvas,
+            {
+              left: -(FIGMA_FRAME_WIDTH * (1 - scale)) / 2,
+              top: -(FIGMA_FRAME_HEIGHT * (1 - scale)) / 2,
+              transform: [{ scale }],
+            },
+          ]}
+        >
+          {children}
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -2279,7 +2336,7 @@ function Explore({
         numColumns={3}
         keyExtractor={(x) => x.id}
         contentContainerStyle={s.grid}
-        columnWrapperStyle={{ gap: 22 }}
+        columnWrapperStyle={s.gridRow}
         renderItem={({ item }) => (
           <Pressable
             accessibilityRole="button"
@@ -2614,11 +2671,7 @@ function Drinklist({
       </Text>
       <ScrollView
         style={s.screenScroll}
-        contentContainerStyle={{
-          paddingHorizontal: 32,
-          paddingTop: 14,
-          paddingBottom: 130,
-        }}
+        contentContainerStyle={s.drinklistContent}
       >
         {visibleItems.map((d) => (
           <Pressable key={d.id} onPress={() => onOpen(d)} style={s.listCard}>
@@ -2655,7 +2708,10 @@ function Drinklist({
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Review ${d.name}`}
-                  onPress={() => onReview(d)}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    onReview(d);
+                  }}
                   style={s.smallButton}
                 >
                   <Edit3 size={16} color={C.teal} />
@@ -2663,7 +2719,10 @@ function Drinklist({
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Remove ${d.name} from Drinklist`}
-                  onPress={() => onRemove(d.id)}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    onRemove(d.id);
+                  }}
                   style={[
                     s.smallButton,
                     { backgroundColor: "rgba(255,164,164,.7)" },
@@ -4733,7 +4792,7 @@ export default function App() {
     );
   return (
     <>
-      {body}
+      <ResponsiveAppFrame>{body}</ResponsiveAppFrame>
       <Onboarding
         visible={onboard}
         onDone={(n) => {
@@ -4748,6 +4807,22 @@ export default function App() {
 }
 
 const s = StyleSheet.create({
+  nativeViewport: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "flex-start",
+    overflow: "hidden",
+    backgroundColor: "#fff",
+  },
+  nativeFrame: {
+    position: "relative",
+    overflow: "hidden",
+  },
+  nativeCanvas: {
+    position: "absolute",
+    width: FIGMA_FRAME_WIDTH,
+    height: FIGMA_FRAME_HEIGHT,
+  },
   safe: {
     flex: 1,
     height: Platform.OS === "web" ? FIGMA_FRAME_HEIGHT : "100%",
@@ -5072,22 +5147,41 @@ const s = StyleSheet.create({
     padding: 12,
   },
   profileSearchAvatar: { width: 50, height: 50, borderRadius: 25 },
-  grid: { paddingHorizontal: 32, paddingTop: 20, paddingBottom: 130, gap: 22 },
+  grid: {
+    width: 374,
+    alignSelf: "center",
+    paddingTop: 20,
+    paddingBottom: 130,
+    gap: 22,
+  },
+  gridRow: {
+    width: 374,
+    gap: 22,
+  },
   drinkCard: {
     width: 110,
     height: 187,
     borderRadius: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 6,
+    ...(Platform.OS === "android"
+      ? {
+          boxShadow: "0px 3px 8px rgba(0,0,0,0.25)",
+        }
+      : {
+          shadowColor: "#000",
+          shadowOpacity: 0.25,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 3 },
+          elevation: 6,
+        }),
   },
   drinkCardSurface: {
     flex: 1,
     borderRadius: 16,
     overflow: "hidden",
-    backgroundColor: "rgba(255,255,255,.1)",
+    backgroundColor:
+      Platform.OS === "android"
+        ? "rgba(242,249,229,.82)"
+        : "rgba(255,255,255,.1)",
   },
   drinkGlow: { ...StyleSheet.absoluteFill },
   drinkImageFrame: {
@@ -5138,13 +5232,23 @@ const s = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 0.35,
     borderColor: "rgba(255,255,255,.5)",
-    shadowColor: "#000",
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 10,
+    ...(Platform.OS === "android"
+      ? {
+          backgroundColor: "rgba(43,73,89,.7)",
+          boxShadow: "0px 6px 6px rgba(0,0,0,0.34)",
+        }
+      : {
+          shadowColor: "#000",
+          shadowOpacity: 0.4,
+          shadowRadius: 6,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 10,
+        }),
     overflow: "hidden",
     flexDirection: "row",
+  },
+  navBlur: {
+    ...StyleSheet.absoluteFill,
   },
   navTint: {
     ...StyleSheet.absoluteFill,
@@ -5157,11 +5261,23 @@ const s = StyleSheet.create({
     height: 110,
     borderRadius: 23,
     marginBottom: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
+    ...(Platform.OS === "android"
+      ? {
+          boxShadow: "0px 4px 4px rgba(0,0,0,0.25)",
+        }
+      : {
+          shadowColor: "#000",
+          shadowOpacity: 0.25,
+          shadowRadius: 4,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 5,
+        }),
+  },
+  drinklistContent: {
+    width: 374,
+    alignSelf: "center",
+    paddingTop: 14,
+    paddingBottom: 130,
   },
   listCardSurface: {
     flex: 1,
@@ -5170,6 +5286,8 @@ const s = StyleSheet.create({
     borderRadius: 23,
     borderWidth: 0.35,
     borderColor: "rgba(255,255,255,.5)",
+    backgroundColor:
+      Platform.OS === "android" ? "rgba(222,244,224,.8)" : "transparent",
   },
   listImageBox: {
     width: 77,
@@ -5857,27 +5975,42 @@ const s = StyleSheet.create({
   },
   badgeComposite: { width: 88, height: 105 },
   badgeCompositeTall: { width: 88, height: 121 },
-  stats: { flexDirection: "row", gap: 10, marginHorizontal: 33, marginTop: 8 },
+  stats: {
+    width: 374,
+    alignSelf: "center",
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+  },
   statsThree: { gap: 8 },
   stat: {
     height: 88,
-    width: 182,
+    flex: 1,
+    minWidth: 0,
     borderRadius: 23,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
+    backgroundColor:
+      Platform.OS === "android" ? "rgba(222,244,224,.78)" : "transparent",
+    ...(Platform.OS === "android"
+      ? {
+          boxShadow: "0px 4px 4px rgba(0,0,0,0.25)",
+        }
+      : {
+          shadowColor: "#000",
+          shadowOpacity: 0.25,
+          shadowRadius: 4,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 5,
+        }),
   },
   statNumber: { fontFamily: F.bold, fontSize: 25 },
-  statThree: { width: 119 },
+  statThree: { flex: 1 },
   receiptWrap: {
-    width: FIGMA_FRAME_WIDTH - 66,
+    width: 374,
     marginHorizontal: 33,
-    alignSelf: "flex-start",
+    alignSelf: "center",
     shadowColor: "#000",
     shadowOpacity: 0.12,
     shadowRadius: 3,
@@ -5895,7 +6028,7 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "rgba(32,26,27,.12)",
   },
-  receiptItemCopy: { flex: 1, gap: 2 },
+  receiptItemCopy: { flex: 1, minWidth: 0, gap: 2 },
   receiptEditButton: {
     width: 24,
     height: 24,
@@ -5916,6 +6049,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
     gap: 5,
   },
   receiptStars: { color: "#e3a000", fontSize: 12 },
@@ -5979,17 +6113,26 @@ const s = StyleSheet.create({
     width: 77,
     height: 120,
     borderRadius: 9,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 5,
+    ...(Platform.OS === "android"
+      ? {
+          boxShadow: "0px 3px 5px rgba(0,0,0,0.25)",
+        }
+      : {
+          shadowColor: "#000",
+          shadowOpacity: 0.25,
+          shadowRadius: 5,
+          shadowOffset: { width: 0, height: 3 },
+          elevation: 5,
+        }),
   },
   friendCompactSurface: {
     flex: 1,
     borderRadius: 9,
     overflow: "hidden",
-    backgroundColor: "rgba(255,255,255,.1)",
+    backgroundColor:
+      Platform.OS === "android"
+        ? "rgba(242,249,229,.86)"
+        : "rgba(255,255,255,.1)",
   },
   friendCompactImageFrame: {
     width: 77,
