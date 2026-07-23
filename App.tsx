@@ -3172,31 +3172,39 @@ function DrinkProfile({
 
 function ReviewScreen({
   drink,
+  existingReview,
   onBack,
   onSubmit,
 }: {
   drink: Drink;
+  existingReview?: Review;
   onBack: () => void;
   onSubmit: (r: number, t: string, tags: string[]) => void;
 }) {
-  const [rating, setRating] = useState(0);
-  const [text, setText] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
+  const isEditing = Boolean(existingReview);
+  const [rating, setRating] = useState(existingReview?.rating || 0);
+  const [text, setText] = useState(existingReview?.text || "");
+  const [tags, setTags] = useState<string[]>(existingReview?.tags || []);
   const [customNote, setCustomNote] = useState("");
   const [addingCustom, setAddingCustom] = useState(false);
-  const [availableNotes, setAvailableNotes] = useState([
-    "Citrusy",
-    "Fresh",
-    "Tangy",
-    "Sweet",
-    "Strong",
-    "Floral",
-    "Nutty",
-    "Bitter",
-    "Creamy",
-    "Refreshing",
-    "Tarty",
-  ]);
+  const [availableNotes, setAvailableNotes] = useState(() =>
+    Array.from(
+      new Set([
+        "Citrusy",
+        "Fresh",
+        "Tangy",
+        "Sweet",
+        "Strong",
+        "Floral",
+        "Nutty",
+        "Bitter",
+        "Creamy",
+        "Refreshing",
+        "Tarty",
+        ...(existingReview?.tags || []),
+      ]),
+    ),
+  );
   return (
     <Background>
       <KeyboardAvoidingView
@@ -3311,23 +3319,27 @@ function ReviewScreen({
           </View>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Submit review"
+            accessibilityLabel={isEditing ? "Save review" : "Submit review"}
             style={[s.primary, { margin: 32, height: 46 }]}
             onPress={() => {
               if (!rating)
                 return Alert.alert(
                   "Choose a rating",
-                  "Select at least half a star before submitting.",
+                  `Select at least half a star before ${
+                    isEditing ? "saving" : "submitting"
+                  }.`,
                 );
               if (!text.trim())
                 return Alert.alert(
                   "Write a review",
-                  "Tell us what you thought before submitting.",
+                  `Tell us what you thought before ${
+                    isEditing ? "saving" : "submitting"
+                  }.`,
                 );
               onSubmit(rating, text.trim(), tags);
             }}
           >
-            <Text style={s.primaryText}>Submit</Text>
+            <Text style={s.primaryText}>{isEditing ? "Save" : "Submit"}</Text>
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -3432,7 +3444,7 @@ function Profile({
   onToggleFollow,
   onBack,
   onGo,
-  onReview,
+  onEditReview,
   onOpenReview,
   onEdit,
   onSettings,
@@ -3447,7 +3459,7 @@ function Profile({
   onToggleFollow?: () => void;
   onBack?: () => void;
   onGo: (s: Screen) => void;
-  onReview: (d: Drink) => void;
+  onEditReview: (review: Review) => void;
   onOpenReview: (review: Review) => void;
   onEdit: () => void;
   onSettings: () => void;
@@ -3684,7 +3696,7 @@ function Profile({
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel={`Edit review for ${d?.name}`}
-                          onPress={() => onReview(d)}
+                          onPress={() => onEditReview(r)}
                           style={s.receiptEditButton}
                         >
                           <Edit3 size={12} color={C.red} />
@@ -4389,6 +4401,8 @@ export default function App() {
   const [selectedReviewId, setSelectedReviewId] = useState(
     initialReviews[0].id,
   );
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
+  const [reviewReturn, setReviewReturn] = useState<Screen>("drink");
   const [reviewDetailReturn, setReviewDetailReturn] = useState<Screen>("drink");
   const [reviewDetailTab, setReviewDetailTab] = useState<
     "explore" | "drinklist" | "profile"
@@ -4506,7 +4520,19 @@ export default function App() {
   };
   const review = (d: Drink) => {
     if (screen !== "drink") setDrinkReturn(screen);
+    setEditingReviewId(null);
+    setReviewReturn("drink");
     setSelected(d);
+    setScreen("review");
+  };
+  const editReview = (reviewToEdit: Review) => {
+    const drinkToEdit = drinks.find(
+      (drink) => drink.id === reviewToEdit.drinkId,
+    );
+    if (!drinkToEdit) return;
+    setEditingReviewId(reviewToEdit.id);
+    setReviewReturn(screen);
+    setSelected(drinkToEdit);
     setScreen("review");
   };
   const openReview = (reviewToOpen: Review) => {
@@ -4584,6 +4610,9 @@ export default function App() {
     );
   const selectedReview =
     reviews.find((item) => item.id === selectedReviewId) || reviews[0];
+  const reviewBeingEdited = editingReviewId
+    ? reviews.find((item) => item.id === editingReviewId)
+    : undefined;
   let body: React.ReactNode;
   if (screen === "splash") body = <Splash />;
   else if (screen === "explore")
@@ -4662,9 +4691,26 @@ export default function App() {
   else if (screen === "review")
     body = (
       <ReviewScreen
+        key={`${selected.id}-${editingReviewId || "new"}`}
         drink={selected}
-        onBack={() => go("drink")}
+        existingReview={reviewBeingEdited}
+        onBack={() => {
+          setEditingReviewId(null);
+          setScreen(reviewReturn);
+        }}
         onSubmit={(rating, text, tags) => {
+          if (editingReviewId && reviewBeingEdited) {
+            setReviews((current) =>
+              current.map((item) =>
+                item.id === editingReviewId
+                  ? { ...item, rating, text, tags }
+                  : item,
+              ),
+            );
+            setEditingReviewId(null);
+            setScreen(reviewReturn);
+            return;
+          }
           setReviews((x) => [
             {
               id: Date.now().toString(),
@@ -4685,6 +4731,7 @@ export default function App() {
             ...x,
           ]);
           setSaved((x) => x.filter((id) => id !== selected.id));
+          setEditingReviewId(null);
           go("drink");
         }}
       />
@@ -4698,7 +4745,7 @@ export default function App() {
         badgeTab={badgeTab}
         setBadgeTab={setBadgeTab}
         onGo={go}
-        onReview={review}
+        onEditReview={editReview}
         onOpenReview={openReview}
         onEdit={() => {
           setSettingsInitialSection("account");
@@ -4730,7 +4777,7 @@ export default function App() {
         }
         onBack={() => setScreen(profileReturn)}
         onGo={go}
-        onReview={review}
+        onEditReview={editReview}
         onOpenReview={openReview}
         onEdit={() => undefined}
         onSettings={() => undefined}
