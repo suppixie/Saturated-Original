@@ -2059,14 +2059,14 @@ function BottomNav({
       )}
       <LinearGradient
         pointerEvents="none"
-        colors={["rgba(38,81,88,.22)", "rgba(4,178,100,.22)"]}
+        colors={["rgba(90,132,132,.28)", "rgba(48,205,139,.26)"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={s.navTint}
       />
       <LinearGradient
         pointerEvents="none"
-        colors={["rgba(255,255,255,.34)", "rgba(255,255,255,.04)"]}
+        colors={["rgba(255,255,255,.46)", "rgba(255,255,255,.1)"]}
         style={s.navHighlight}
       />
       {(["explore", "drinklist", "profile"] as Screen[]).map((x) => (
@@ -2077,7 +2077,7 @@ function BottomNav({
           onPress={() => onGo(x)}
           style={[s.navItem, active === x && s.navActive]}
         >
-          <Text style={[s.navText, active === x && { color: "#fff" }]}>
+          <Text style={[s.navText, active === x && s.navTextActive]}>
             {x[0].toUpperCase() + x.slice(1)}
           </Text>
         </Pressable>
@@ -4833,6 +4833,7 @@ const s = StyleSheet.create({
     marginHorizontal: "auto",
     backgroundColor: "#fff",
     overflow: "hidden",
+    paddingTop: Platform.OS === "android" ? 22 : 0,
   },
   bgWhite: {
     ...StyleSheet.absoluteFill,
@@ -4881,16 +4882,18 @@ const s = StyleSheet.create({
   screenList: { flex: 1, minHeight: 0 },
   screenScroll: { flex: 1, minHeight: 0 },
   heading: {
-    height: 90,
+    height: 102,
     flexDirection: "row",
     gap: 16,
     alignItems: "center",
     paddingHorizontal: 30,
+    paddingTop: 12,
   },
   headingText: { fontFamily: F.display, fontSize: 32, color: C.red },
   headerRow: {
-    height: 78,
+    height: 90,
     paddingHorizontal: 27,
+    paddingTop: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -5234,7 +5237,7 @@ const s = StyleSheet.create({
     borderColor: "rgba(255,255,255,.5)",
     ...(Platform.OS === "android"
       ? {
-          backgroundColor: "rgba(43,73,89,.7)",
+          backgroundColor: "rgba(74,105,108,.62)",
           boxShadow: "0px 6px 6px rgba(0,0,0,0.34)",
         }
       : {
@@ -5256,7 +5259,18 @@ const s = StyleSheet.create({
   navHighlight: { ...StyleSheet.absoluteFill },
   navItem: { flex: 1, alignItems: "center", justifyContent: "center" },
   navActive: { backgroundColor: "rgba(0,0,0,.3)" },
-  navText: { fontFamily: F.display, fontSize: 16, color: C.teal },
+  navText: {
+    fontFamily: F.display,
+    fontSize: 16,
+    color: "#173746",
+    textShadowColor: "rgba(255,255,255,.3)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
+  },
+  navTextActive: {
+    color: "#fff",
+    textShadowColor: "rgba(0,0,0,.24)",
+  },
   listCard: {
     height: 110,
     borderRadius: 23,
